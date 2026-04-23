@@ -1,7 +1,7 @@
 [project]
-name = "python-scaffolding"
+name = "plumb"
 version = "0.1.0"
-description = "Add your description here"
+description = "A measurement spine for orchestrator + sub-agent systems: four-table SQLite schema with decorator + context-manager entry points."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []

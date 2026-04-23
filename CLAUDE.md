@@ -1,6 +1,6 @@
-# [Your Project Name]
+# plumb
 
-`[Add a one-sentence description of what this project does and for whom.]`
+`A measurement spine for orchestrator + sub-agent systems: four-table SQLite schema with decorator + context-manager entry points, for DevEx / AI-ML / agentic-systems teams.`
 
 This document is the central "signpost" for our repository. It provides quick setup commands, links to our core documentation library, and explains our development workflow.
 

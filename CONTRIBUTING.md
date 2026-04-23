@@ -1,4 +1,4 @@
-# Contributing to Python Scaffolding
+# Contributing to plumb
 
 Thank you for your interest in contributing! This document provides guidelines and instructions for contributing to this project.
 
@@ -30,8 +30,8 @@ This project adheres to a code of professional conduct. By participating, you ar
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/python-scaffolding.git
-   cd python-scaffolding
+   git clone https://github.com/YOUR_USERNAME/plumb.git
+   cd plumb
    ```
 3. Set up the development environment:
    ```bash

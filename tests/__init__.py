@@ -1,1 +1,1 @@
-"""Test suite for python-scaffolding."""
+"""Test suite for plumb."""

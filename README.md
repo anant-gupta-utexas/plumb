@@ -1,19 +1,37 @@
-# Python Scaffolding
+# plumb
 
-A modern Python project template following Clean Architecture principles.
+**A measurement spine for orchestrator + sub-agent systems.** A small Python
+package plus a four-table SQLite schema that captures what current agent-
+telemetry tools don't: whether a human accepted the agent's output, how the
+orchestrator routed, how sub-agents handed off, and what it cost to get the
+answer.
 
 ## Overview
 
-This project provides a solid foundation for building maintainable, testable, and scalable Python applications. It implements Clean Architecture to separate business logic from infrastructure concerns, making your codebase more resilient to change.
+plumb is an opinionated reference implementation of a unified offline + online
+measurement framework for multi-agent systems. It ships a four-table SQLite
+schema (`runs`, `spans`, `scores`, `examples`), two entry points (decorator +
+context manager), and a `plumb` CLI. The design is prescriptive: if a signal
+can't be expressed in those four tables, it isn't v1.
+
+One artifact, three audiences:
+
+- **DevEx teams** — intervention rate, acceptance, routing quality on real dev work.
+- **AI/ML engineers** — four-table schema, paired-McNemar ship decisions, statistical rigor.
+- **Agentic-systems teams** — orchestrator routing, handoff round-trip, pass^k, MAST-aligned span tree.
+
+See [`docs/1_product/PRD.md`](docs/1_product/PRD.md) for the full product
+framing and [`docs/2_architecture/research/schema-and-metrics-v1.md`](docs/2_architecture/research/schema-and-metrics-v1.md)
+for the canonical schema and metric derivation.
 
 ## Features
 
-- **Clean Architecture**: Three-layer architecture (Domain, Application, Infrastructure)
-- **Python 3.13**: Latest Python features and performance improvements
-- **Type Safety**: Full type hints support with mypy
-- **Modern Tooling**: uv for dependency management, ruff for linting/formatting
-- **Comprehensive Documentation**: Structured docs for product, architecture, guides, and testing
-- **Development Workflow**: Planning templates in `dev/` directory for feature development
+- **Four-table schema** (`runs`, `spans`, `scores`, `examples`) — unified offline + online
+- **Two entry points** — a `@run(...)` decorator and a `with run(...)` context manager
+- **`plumb` CLI** — `run stats`, `score write`, `example promote`, `judge run`
+- **ATTACH-based adapters** — backfill from existing agent-telemetry SQLite files (~200 LOC)
+- **Clean Architecture** — three-layer separation (Domain, Application, Infrastructure)
+- **Python 3.13** with full type hints (mypy), modern tooling (uv, ruff)
 
 ## Quick Start
 
@@ -25,8 +43,8 @@ This project provides a solid foundation for building maintainable, testable, an
 
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd python-scaffolding
+git clone https://github.com/anant-gupta-utexas/plumb.git
+cd plumb
 
 # Set up virtual environment with uv
 uv venv
@@ -42,21 +60,21 @@ python main.py
 ## Project Structure
 
 ```
-python-scaffolding/
+plumb/
 ├── dev/          # WORK-IN-PROGRESS: Technical designs for features being built.
 │   ├── active/   # Active feature development plans (TDS, tasks).
 │   └── archive/  # Historical record of plans for completed features.
 │
 ├── docs/         # EVERGREEN DOCS: The single source of truth for the project.
-│   ├── 1_product/      #   "Why": Product Requirements Documents (PRD).
-│   ├── 2_architecture/ #   "High-Level How": System Design, TRD, diagrams.
-│   ├── 3_guides/       #   "How-to": Developer setup, core concepts, examples.
+│   ├── 1_product/      #   "Why": PRD.md — problem, goal, audiences, non-goals, metrics.
+│   ├── 2_architecture/ #   "High-Level How": system_design.md, TRD.md, research/ (schema + metrics).
+│   ├── 3_guides/       #   "How-to": getting_started.md, core_concepts.md.
 │   └── 4_testing/      #   "Quality": Testing strategy, scenarios, coverage.
 │
-├── src/          # SOURCE CODE: The application itself.
-│   ├── application/    #   "Use Cases": Orchestrates workflows (e.g., CreateConversation).
-│   ├── domain/         #   "Business Logic": Pure entities & rules (e.g., Conversation entity).
-│   └── infrastructure/ #   "Frameworks": API (FastAPI), DB (SQLAlchemy), etc.
+├── src/          # SOURCE CODE: The plumb package itself.
+│   ├── application/    #   "Use Cases": Orchestrates workflows (e.g., promote trace to example).
+│   ├── domain/         #   "Business Logic": Pure entities & rules (runs, spans, scores, examples).
+│   └── infrastructure/ #   "Frameworks": SQLite persistence, CLI, adapters.
 │
 ├── tests/                 # Test suite
 │   ├── unit/              # Unit tests
@@ -135,13 +153,15 @@ This project follows **Clean Architecture** principles:
 - Implements Domain interfaces
 - Contains: API routes, Database implementations, External services
 
-**Dependency Rule**: Dependencies point inward (Infrastructure � Application � Domain)
+**Dependency Rule**: Dependencies point inward (Infrastructure → Application → Domain)
 
 ## Documentation
 
+- **[Product Requirements (PRD)](docs/1_product/PRD.md)**: Problem, goal, audiences, non-goals, success metrics
+- **[Schema & metrics v1](docs/2_architecture/research/schema-and-metrics-v1.md)**: Canonical four-table schema, metric derivation, design principles
+- **[Research backlog](docs/2_architecture/research/measurement-framework-research.md)**: Literature synthesis (SPACE, DORA, DX Core 4, MAST, TRAIL, …)
 - **[Getting Started Guide](docs/3_guides/getting_started.md)**: Detailed setup instructions
 - **[Core Concepts](docs/3_guides/core_concepts.md)**: Clean Architecture principles
-- **[System Design](docs/2_architecture/system_design.md)**: High-level architecture
 - **[Testing Guide](docs/4_testing/index.md)**: Testing strategy and best practices
 
 ## Contributing
@@ -158,4 +178,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Python Type Hints](https://docs.python.org/3/library/typing.html)
 - [uv Documentation](https://github.com/astral-sh/uv)
 - [pytest Documentation](https://docs.pytest.org/)
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)

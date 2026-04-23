@@ -1,5 +1,5 @@
 def main():
-    print("Hello from python-scaffolding!")
+    print("Hello from plumb!")
 
 
 if __name__ == "__main__":

@@ -10,8 +10,8 @@
 
 ### 1. Clone the Repository
 ```bash
-git clone <repository-url>
-cd python-scaffolding
+git clone https://github.com/anant-gupta-utexas/plumb.git
+cd plumb
 ```
 
 ### 2. Set Up Python Environment
@@ -124,5 +124,5 @@ uv sync --reinstall
 
 ## Next Steps
 - Read [Core Concepts](core_concepts.md)
-- Review [System Design](../2_architecture/system_design.md)
+- Review [Schema & Metrics v1](../2_architecture/research/schema-and-metrics-v1.md)
 - Check [Testing Guide](../4_testing/index.md)
