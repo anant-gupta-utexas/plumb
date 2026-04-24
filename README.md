@@ -1,18 +1,10 @@
 # plumb
 
-**A measurement spine for orchestrator + sub-agent systems.** A small Python
-package plus a four-table SQLite schema that captures what current agent-
-telemetry tools don't: whether a human accepted the agent's output, how the
-orchestrator routed, how sub-agents handed off, and what it cost to get the
-answer.
+**A measurement spine for orchestrator + sub-agent systems.** A small Python package plus a four-table SQLite schema that captures what current agent-telemetry tools don't: whether a human accepted the agent's output, how the orchestrator routed, how sub-agents handed off, and what it cost to get the answer.
 
 ## Overview
 
-plumb is an opinionated reference implementation of a unified offline + online
-measurement framework for multi-agent systems. It ships a four-table SQLite
-schema (`runs`, `spans`, `scores`, `examples`), two entry points (decorator +
-context manager), and a `plumb` CLI. The design is prescriptive: if a signal
-can't be expressed in those four tables, it isn't v1.
+plumb is an opinionated reference implementation of a unified offline + online measurement framework for multi-agent systems. It ships a four-table SQLite schema (`runs`, `spans`, `scores`, `examples`), two entry points (decorator + context manager), and a `plumb` CLI. The design is prescriptive: if a signal can't be expressed in those four tables, it isn't v1.
 
 One artifact, three audiences:
 
@@ -20,161 +12,73 @@ One artifact, three audiences:
 - **AI/ML engineers** — four-table schema, paired-McNemar ship decisions, statistical rigor.
 - **Agentic-systems teams** — orchestrator routing, handoff round-trip, pass^k, MAST-aligned span tree.
 
-See [`docs/1_product_and_research/PRD.md`](docs/1_product_and_research/PRD.md) for the full product
-framing and [`docs/1_product_and_research/schema-and-metrics-v1.md`](docs/1_product_and_research/schema-and-metrics-v1.md)
-for the canonical schema and metric derivation.
-
-## Features
-
-- **Four-table schema** (`runs`, `spans`, `scores`, `examples`) — unified offline + online
-- **Two entry points** — a `@run(...)` decorator and a `with run(...)` context manager
-- **`plumb` CLI** — `run stats`, `score write`, `example promote`, `judge run`
-- **ATTACH-based adapters** — backfill from existing agent-telemetry SQLite files (~200 LOC)
-- **Clean Architecture** — three-layer separation (Domain, Application, Infrastructure)
-- **Python 3.13** with full type hints (mypy), modern tooling (uv, ruff)
-
 ## Quick Start
 
-### Prerequisites
-- Python 3.13 or higher
-- [uv](https://github.com/astral-sh/uv) (recommended) or pip
-
-### Installation
+Requires **Python 3.13+** and `[uv](https://github.com/astral-sh/uv)` (or pip).
 
 ```bash
-# Clone the repository
 git clone https://github.com/anant-gupta-utexas/plumb.git
 cd plumb
-
-# Set up virtual environment with uv
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
+uv venv && source .venv/bin/activate
 uv sync
+pytest
+```
 
-# Run the application
-python main.py
+plumb is a library, not an app — there is no `main` to run. Once v1 lands, usage will look like:
+
+```python
+from plumb import run
+
+@run(task_id="content-pipeline.ingest", kind="online")
+def ingest(url: str) -> Doc: ...
+
+with run(task_id="atlas.stage5.codegen", kind="online") as r:
+    r.add_score("verify_pass", scorer="deterministic", value_label="pass")
+    ...
 ```
 
 ## Project Structure
 
+> **Transitional note.** The `src/domain|application|infrastructure/` folders on disk are empty scaffolding from an earlier template. The authoritative layout for v1 code is the `plumb/` ports-and-adapters shape below (per [CLAUDE.md](CLAUDE.md) and [SDD §3](docs/2_architecture/SYSTEM_DESIGN.md)); the `src/` skeleton will be removed / renamed at first-code time.
+
 ```
 plumb/
-├── dev/          # WORK-IN-PROGRESS: Technical designs for features being built.
-│   ├── active/   # Active feature development plans (TDS, tasks).
-│   └── archive/  # Historical record of plans for completed features.
-│
-├── docs/         # EVERGREEN DOCS: The single source of truth for the project.
-│   ├── 1_product_and_research/   #   "Why": PRD.md — problem, goal, audiences, non-goals, metrics.
-│   ├── 2_architecture/ #   "High-Level How": system_design.md, TRD.md.
-│   ├── 3_guides/       #   "How-to": getting_started.md, core_concepts.md.
-│   └── 4_testing/      #   "Quality": Testing strategy, scenarios, coverage.
-│
-├── src/          # SOURCE CODE: The plumb package itself.
-│   ├── application/    #   "Use Cases": Orchestrates workflows (e.g., promote trace to example).
-│   ├── domain/         #   "Business Logic": Pure entities & rules (runs, spans, scores, examples).
-│   └── infrastructure/ #   "Frameworks": SQLite persistence, CLI, adapters.
-│
-├── tests/                 # Test suite
-│   ├── unit/              # Unit tests
-│   ├── integration/       # Integration tests
-│   └── e2e/               # End-to-end tests
-│
-├── CLAUDE.md              # Project signpost and workflow guide
-├── CONTRIBUTING.md        # Contribution guidelines
-└── README.md              # This file
+├── core/        # Pure-Python core: entities, ports (Protocols), stats
+├── adapters/    # storage_sqlite, blobstore_fs, judge_*, agentsview_attach
+├── autocapture/ # Monkey-patch installers for anthropic, openai, httpx
+├── api.py       # Public `run` decorator + context manager
+├── cli.py       # `plumb` typer-based CLI
+├── http.py      # FastAPI loopback-only read service
+└── config.py    # pydantic-settings
+
+docs/   # Evergreen documentation (PRD, TRD, SDD, guides, testing)
+dev/    # Work-in-progress feature plans (active/ + archive/)
+tests/  # unit/ + integration/ + e2e/
 ```
-
-## Development
-
-### Code Quality
-
-```bash
-# Lint code
-ruff check .
-
-# Format code
-ruff format .
-
-# Type checking
-mypy src/
-```
-
-### Testing
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src --cov-report=html
-
-# Run specific test types
-pytest tests/unit
-pytest tests/integration
-pytest tests/e2e
-```
-
-### Development Workflow
-
-1. **Plan**: Create feature docs in `dev/active/[feature-name]/`
-   - `[feature-name]-plan.md`: Technical Design Specification
-   - `[feature-name]-context.md`: Context and dependencies
-   - `[feature-name]-tasks.md`: Implementation checklist
-
-2. **Build**: Implement following Clean Architecture
-   - Write tests first (TDD)
-   - Keep domain layer pure (no framework dependencies)
-   - Use dependency injection
-
-3. **Document**: Update `docs/` with any architectural or API changes
-
-4. **Archive**: Move completed feature docs to `dev/archive/`
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
-
-## Architecture
-
-This project follows **Clean Architecture** principles:
-
-### Domain Layer (`src/domain/`)
-- Pure business logic
-- No external dependencies
-- Contains: Entities, Value Objects, Repository Interfaces, Domain Services
-
-### Application Layer (`src/application/`)
-- Use cases and orchestration
-- Depends only on Domain layer
-- Contains: Use Cases, DTOs, Service Interfaces
-
-### Infrastructure Layer (`src/infrastructure/`)
-- Framework-specific code
-- Implements Domain interfaces
-- Contains: API routes, Database implementations, External services
-
-**Dependency Rule**: Dependencies point inward (Infrastructure → Application → Domain)
 
 ## Documentation
 
-- **[Product Requirements (PRD)](docs/1_product_and_research/PRD.md)**: Problem, goal, audiences, non-goals, success metrics
-- **[Schema & metrics v1](docs/1_product_and_research/schema-and-metrics-v1.md)**: Canonical four-table schema, metric derivation, design principles
-- **[Research backlog](docs/1_product_and_research/measurement-framework-research.md)**: Literature synthesis (SPACE, DORA, DX Core 4, MAST, TRAIL, …)
-- **[Getting Started Guide](docs/3_guides/getting_started.md)**: Detailed setup instructions
-- **[Core Concepts](docs/3_guides/core_concepts.md)**: Clean Architecture principles
-- **[Testing Guide](docs/4_testing/index.md)**: Testing strategy and best practices
+Start here depending on what you're after:
 
-## Contributing
+- **Product framing** — [PRD](docs/1_product_and_research/PRD.md) (problem, goals, audiences, non-goals, success metrics)
+- **What to build** — [TRD](docs/2_architecture/TRD.md) (FR/NFR IDs, SQL types + constraints, acceptance criteria)
+- **How it's shaped** — [System Design](docs/2_architecture/SYSTEM_DESIGN.md) (architecture diagrams, component layout, data flow, trade-offs)
+- **Schema + metric derivation** — [schema-and-metrics-v1](docs/1_product_and_research/schema-and-metrics-v1.md)
+- **Decisions considered but deferred** — [deferred-features](docs/2_architecture/deferred-features.md)
+- **Literature synthesis backlog** — [measurement-framework-research](docs/1_product_and_research/measurement-framework-research.md)
+- **Contributor workflow** — [CLAUDE.md](CLAUDE.md) (repo signpost) and [CONTRIBUTING.md](CONTRIBUTING.md)
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our development workflow and code standards.
+## Development
+
+```bash
+ruff check .                       # lint
+ruff format .                      # format
+mypy --strict plumb/core/          # type-check pure core
+pytest --cov=plumb                 # run tests with coverage
+```
+
+Feature workflow (plan → build → archive) is described in [CLAUDE.md](CLAUDE.md#directory-structure--walkthrough). Detailed guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Resources
-
-- [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
-- [Python Type Hints](https://docs.python.org/3/library/typing.html)
-- [uv Documentation](https://github.com/astral-sh/uv)
-- [pytest Documentation](https://docs.pytest.org/)
+MIT — see [LICENSE](LICENSE).
