@@ -20,8 +20,8 @@ One artifact, three audiences:
 - **AI/ML engineers** — four-table schema, paired-McNemar ship decisions, statistical rigor.
 - **Agentic-systems teams** — orchestrator routing, handoff round-trip, pass^k, MAST-aligned span tree.
 
-See [`docs/1_product/PRD.md`](docs/1_product/PRD.md) for the full product
-framing and [`docs/2_architecture/research/schema-and-metrics-v1.md`](docs/2_architecture/research/schema-and-metrics-v1.md)
+See [`docs/1_product_and_research/PRD.md`](docs/1_product_and_research/PRD.md) for the full product
+framing and [`docs/1_product_and_research/schema-and-metrics-v1.md`](docs/1_product_and_research/schema-and-metrics-v1.md)
 for the canonical schema and metric derivation.
 
 ## Features
@@ -66,8 +66,8 @@ plumb/
 │   └── archive/  # Historical record of plans for completed features.
 │
 ├── docs/         # EVERGREEN DOCS: The single source of truth for the project.
-│   ├── 1_product/      #   "Why": PRD.md — problem, goal, audiences, non-goals, metrics.
-│   ├── 2_architecture/ #   "High-Level How": system_design.md, TRD.md, research/ (schema + metrics).
+│   ├── 1_product_and_research/   #   "Why": PRD.md — problem, goal, audiences, non-goals, metrics.
+│   ├── 2_architecture/ #   "High-Level How": system_design.md, TRD.md.
 │   ├── 3_guides/       #   "How-to": getting_started.md, core_concepts.md.
 │   └── 4_testing/      #   "Quality": Testing strategy, scenarios, coverage.
 │
@@ -157,9 +157,9 @@ This project follows **Clean Architecture** principles:
 
 ## Documentation
 
-- **[Product Requirements (PRD)](docs/1_product/PRD.md)**: Problem, goal, audiences, non-goals, success metrics
-- **[Schema & metrics v1](docs/2_architecture/research/schema-and-metrics-v1.md)**: Canonical four-table schema, metric derivation, design principles
-- **[Research backlog](docs/2_architecture/research/measurement-framework-research.md)**: Literature synthesis (SPACE, DORA, DX Core 4, MAST, TRAIL, …)
+- **[Product Requirements (PRD)](docs/1_product_and_research/PRD.md)**: Problem, goal, audiences, non-goals, success metrics
+- **[Schema & metrics v1](docs/1_product_and_research/schema-and-metrics-v1.md)**: Canonical four-table schema, metric derivation, design principles
+- **[Research backlog](docs/1_product_and_research/measurement-framework-research.md)**: Literature synthesis (SPACE, DORA, DX Core 4, MAST, TRAIL, …)
 - **[Getting Started Guide](docs/3_guides/getting_started.md)**: Detailed setup instructions
 - **[Core Concepts](docs/3_guides/core_concepts.md)**: Clean Architecture principles
 - **[Testing Guide](docs/4_testing/index.md)**: Testing strategy and best practices

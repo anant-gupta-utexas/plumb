@@ -124,5 +124,5 @@ uv sync --reinstall
 
 ## Next Steps
 - Read [Core Concepts](core_concepts.md)
-- Review [Schema & Metrics v1](../2_architecture/research/schema-and-metrics-v1.md)
+- Review [Schema & Metrics v1](../1_product_and_research/schema-and-metrics-v1.md)
 - Check [Testing Guide](../4_testing/index.md)

@@ -23,10 +23,10 @@ pytest
 **EVERGREEN DOCS**: The single source of truth for the project.
 ```
 docs/
-├── 1_product/      # "Why": Product Requirements (PRD.md)
-├── 2_architecture/ # "High-Level How": System Design, TRD, diagrams
-├── 3_guides/       # "How-to": Developer guides (getting_started.md, core_concepts.md)
-└── 4_testing/      # "Quality": Testing strategy (index.md, unit_tests.md)
+├── 1_product_and_research/ # "Why": Product Requirements (PRD.md) + research docs
+├── 2_architecture/         # "High-Level How": System Design, TRD, diagrams
+├── 3_guides/               # "How-to": Developer guides (getting_started.md, core_concepts.md)
+└── 4_testing/              # "Quality": Testing strategy (index.md, unit_tests.md)
 ```
 
 ### Development Documentation (`dev/`)

@@ -2,7 +2,7 @@
 
 > **Scope.** Canonical schema, metric derivation, and design principles for
 > plumb v1. The product framing (problem, audiences, non-goals, success
-> metrics) lives in `[../../1_product/PRD.md](../../1_product/PRD.md)`. The upstream
+> metrics) lives in `[./PRD.md](./PRD.md)`. The upstream
 > literature synthesis lives in
 > `[./measurement-framework-research.md](./measurement-framework-research.md)`.
 > This document is the authoritative reference for what plumb measures, how,

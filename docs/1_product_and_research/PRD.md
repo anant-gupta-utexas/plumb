@@ -41,7 +41,7 @@ Ship a minimal, opinionated measurement spine that:
 
 - fits a single-developer workflow *and* generalizes to a small DevEx /
   AI-ML / agentic-systems team;
-- captures the ten v1 metrics defined in [`../2_architecture/research/schema-and-metrics-v1.md`](../2_architecture/research/schema-and-metrics-v1.md)
+- captures the ten v1 metrics defined in [`./schema-and-metrics-v1.md`](./schema-and-metrics-v1.md)
   across **one** unified `runs` table (offline + online);
 - instruments multi-component agent systems (orchestrator, content pipeline,
   recommender, any sub-agent) from day one;
@@ -62,7 +62,7 @@ One artifact, three framings:
 ## 4. What plumb measures (v1 metric cut)
 
 Ten metrics, all computable from the four-table schema, each covers a distinct
-failure mode. Derived in [`../2_architecture/research/schema-and-metrics-v1.md`](../2_architecture/research/schema-and-metrics-v1.md); listed here for the PRD:
+failure mode. Derived in [`./schema-and-metrics-v1.md`](./schema-and-metrics-v1.md); listed here for the PRD:
 
 1. Task completion (binary)
 2. End-to-end latency
@@ -103,7 +103,7 @@ examples   (example_id PK, task_id, inputs_hash, expected_output_hash,
             origin_run_id? FK → runs, active, created_at)
 ```
 
-Key design moves (expanded in [`../2_architecture/research/schema-and-metrics-v1.md`](../2_architecture/research/schema-and-metrics-v1.md)):
+Key design moves (expanded in [`./schema-and-metrics-v1.md`](./schema-and-metrics-v1.md)):
 
 - **`runs.kind`** unifies offline evals and production traces in one table.
 - **`spans.input_hash` / `output_hash`** keep PII out of the main row; full
@@ -216,13 +216,13 @@ the flagship post has no data to stand on.
   detectable effect. Must state this explicitly in any model-swap post.
 - **`agentsview` schema drift.** ATTACH is cheap today, but if the upstream
   schema changes we need a 1-hour migration path, not a re-design.
-- **Scope creep from the research doc.** [`../2_architecture/research/measurement-framework-research.md`](../2_architecture/research/measurement-framework-research.md)
+- **Scope creep from the research doc.** [`./measurement-framework-research.md`](./measurement-framework-research.md)
   is the 66KB literature synthesis; the canonical schema in
-  [`../2_architecture/research/schema-and-metrics-v1.md`](../2_architecture/research/schema-and-metrics-v1.md) supersedes it for v1 shape. The PRD
+  [`./schema-and-metrics-v1.md`](./schema-and-metrics-v1.md) supersedes it for v1 shape. The PRD
   points at the schema-and-metrics-v1 doc, not the raw literature synthesis, for v1 decisions.
 
 ## 10. Links
 
-- Canonical schema + metric derivation: [`../2_architecture/research/schema-and-metrics-v1.md`](../2_architecture/research/schema-and-metrics-v1.md)
-- Research backlog (literature synthesis): [`../2_architecture/research/measurement-framework-research.md`](../2_architecture/research/measurement-framework-research.md)
+- Canonical schema + metric derivation: [`./schema-and-metrics-v1.md`](./schema-and-metrics-v1.md)
+- Research backlog (literature synthesis): [`./measurement-framework-research.md`](./measurement-framework-research.md)
 - Project README: [`../../README.md`](../../README.md)

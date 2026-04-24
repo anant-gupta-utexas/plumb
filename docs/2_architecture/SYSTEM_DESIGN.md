@@ -1,25 +1,25 @@
 # plumb — System Design Document (SDD)
 
-**Status:** Draft v1 — synthesized from [PRD](../1_product/PRD.md) and [TRD](TRD.md)
+**Status:** Draft v1 — synthesized from [PRD](../1_product_and_research/PRD.md) and [TRD](TRD.md)
 **Owner:** anant
 **Last updated:** 2026-04-23
 **Scope:** plumb v1 (Phase 1 ship, Week 6 target per PRD §8)
 
-> **Reading order.** This SDD is the **visual, architecture-first blueprint** — what the system looks like, how the pieces fit, and which trade-offs were made. The **"why the product exists"** lives in `[../1_product/PRD.md](../1_product/PRD.md)`. The **normative "what to build" spec** (FR/NFR IDs, SQL constraints, acceptance criteria) lives in `[TRD.md](TRD.md)`. The **canonical schema + metric derivation** lives in `[research/schema-and-metrics-v1.md](research/schema-and-metrics-v1.md)`. This document references those; it does not restate them.
+> **Reading order.** This SDD is the **visual, architecture-first blueprint** — what the system looks like, how the pieces fit, and which trade-offs were made. The **"why the product exists"** lives in `[../1_product_and_research/PRD.md](../1_product_and_research/PRD.md)`. The **normative "what to build" spec** (FR/NFR IDs, SQL constraints, acceptance criteria) lives in `[TRD.md](TRD.md)`. The **canonical schema + metric derivation** lives in `[../1_product_and_research/schema-and-metrics-v1.md](../1_product_and_research/schema-and-metrics-v1.md)`. This document references those; it does not restate them.
 
 ---
 
 ## 1. Problem Statement & Requirements
 
-plumb is a measurement spine for orchestrator + sub-agent systems. It records *whether an agent actually worked* for a developer — acceptance, routing, handoff, cost, latency, reliability — across both offline evaluation runs and online production traces, in one unified four-table SQLite schema. The product exists to close three instrumentation gaps (per [PRD §1](../1_product/PRD.md)): acceptance is invisible in current agent-telemetry tools, orchestrator-specific failures are uncategorized, and offline/online live in different tools.
+plumb is a measurement spine for orchestrator + sub-agent systems. It records *whether an agent actually worked* for a developer — acceptance, routing, handoff, cost, latency, reliability — across both offline evaluation runs and online production traces, in one unified four-table SQLite schema. The product exists to close three instrumentation gaps (per [PRD §1](../1_product_and_research/PRD.md)): acceptance is invisible in current agent-telemetry tools, orchestrator-specific failures are uncategorized, and offline/online live in different tools.
 
-Three audiences share one artifact (per [PRD §3](../1_product/PRD.md)): DevEx teams (intervention rate + routing quality on real dev work), AI/ML engineers (four-table schema + statistical rigor for model-swap decisions), and agentic-systems teams (orchestrator routing + handoff round-trip + MAST-aligned span tree). The architecture is shaped by six hard technical constraints that fall out of the PRD and TRD:
+Three audiences share one artifact (per [PRD §3](../1_product_and_research/PRD.md)): DevEx teams (intervention rate + routing quality on real dev work), AI/ML engineers (four-table schema + statistical rigor for model-swap decisions), and agentic-systems teams (orchestrator routing + handoff round-trip + MAST-aligned span tree). The architecture is shaped by six hard technical constraints that fall out of the PRD and TRD:
 
-- **Four tables, no fifth.** `runs`, `spans`, `scores`, `examples`. Schema shape is the thesis ([PRD §5](../1_product/PRD.md)).
-- **Two Python entry points, no third.** Decorator + context manager only ([PRD §7 non-goal](../1_product/PRD.md), [TRD FR-API-1](TRD.md)).
+- **Four tables, no fifth.** `runs`, `spans`, `scores`, `examples`. Schema shape is the thesis ([PRD §5](../1_product_and_research/PRD.md)).
+- **Two Python entry points, no third.** Decorator + context manager only ([PRD §7 non-goal](../1_product_and_research/PRD.md), [TRD FR-API-1](TRD.md)).
 - **Zero synchronous network I/O on the hot path.** Judges run offline only ([TRD NFR-Perf-5](TRD.md)).
-- **Zero schema migrations after Week 4.** Any schema change = v2 ([PRD §8 Tier-1](../1_product/PRD.md), [TRD DATA-MIG-1](TRD.md)).
-- **Single-user local.** No SaaS, no multi-tenant, no auth, no streaming ([PRD §7](../1_product/PRD.md)).
+- **Zero schema migrations after Week 4.** Any schema change = v2 ([PRD §8 Tier-1](../1_product_and_research/PRD.md), [TRD DATA-MIG-1](TRD.md)).
+- **Single-user local.** No SaaS, no multi-tenant, no auth, no streaming ([PRD §7](../1_product_and_research/PRD.md)).
 - **Small enough to read in an afternoon.** ~2–3k LOC of pure Python ([TRD §1](TRD.md)).
 
 Everything below is how these constraints shape components, data flow, and trade-offs.
@@ -146,7 +146,7 @@ Arrows point **inward** to `plumb/core/`. `plumb/core/` never imports from adapt
 
 ### 4.1 Data models (high-level ERD)
 
-The four tables, three foreign keys, and the single bidirectional lineage link. Concrete SQL types, `CHECK` constraints, and indexes live in [TRD §7.1](TRD.md); the rationale for each column lives in `[research/schema-and-metrics-v1.md](research/schema-and-metrics-v1.md)`.
+The four tables, three foreign keys, and the single bidirectional lineage link. Concrete SQL types, `CHECK` constraints, and indexes live in [TRD §7.1](TRD.md); the rationale for each column lives in `[../1_product_and_research/schema-and-metrics-v1.md](../1_product_and_research/schema-and-metrics-v1.md)`.
 
 ```mermaid
 erDiagram
@@ -274,7 +274,7 @@ Four properties this flow guarantees:
 | Config                                      | Environment variables via `pydantic-settings`                                                        | No config files shipped; `PLUMB_DATA_DIR` env var is the single configuration knob ([TRD NFR-Sec-1](TRD.md)).                                                                                                                                           |
 
 
-What we explicitly do **not** use: Redis, Postgres, DuckDB, S3, Kafka, OpenSearch, read replicas, partitioning (see [PRD §7](../1_product/PRD.md), [TRD §6.3](TRD.md)). These would all be architecturally sound but they buy us nothing at single-user scale and would cost us the "adopt in an afternoon" property from [PRD §1](../1_product/PRD.md).
+What we explicitly do **not** use: Redis, Postgres, DuckDB, S3, Kafka, OpenSearch, read replicas, partitioning (see [PRD §7](../1_product_and_research/PRD.md), [TRD §6.3](TRD.md)). These would all be architecturally sound but they buy us nothing at single-user scale and would cost us the "adopt in an afternoon" property from [PRD §1](../1_product_and_research/PRD.md).
 
 ---
 
@@ -418,12 +418,12 @@ Blobs are fanned out by the first byte of their sha256 hash, giving 256 top-leve
 
 ### 7.4 What we explicitly do not scale
 
-- **No horizontal scaling.** Single-user SQLite file is the constraint ([PRD §7](../1_product/PRD.md)).
+- **No horizontal scaling.** Single-user SQLite file is the constraint ([PRD §7](../1_product_and_research/PRD.md)).
 - **No read replicas.** One file, one process, all queries local.
 - **No sharding.** `runs.run_id` is a sha-derived TEXT PK; global uniqueness is a hash, not a partition key.
 - **No async work queue.** `plumb judge run` is a foreground CLI command; scheduling is the user's `cron` / GitHub Actions cron.
 
-If the "single-user local" constraint ever drops (an explicit [PRD §7](../1_product/PRD.md) non-goal), the scaling story has to be redesigned. That's a v2+ conversation and would live in `[deferred-features.md](deferred-features.md)`.
+If the "single-user local" constraint ever drops (an explicit [PRD §7](../1_product_and_research/PRD.md) non-goal), the scaling story has to be redesigned. That's a v2+ conversation and would live in `[deferred-features.md](deferred-features.md)`.
 
 ---
 
@@ -464,7 +464,7 @@ sequenceDiagram
 ### 8.3 Network posture
 
 - HTTP service (`plumb serve`) binds `127.0.0.1:8765` by default; binding `0.0.0.0` requires an explicit `--host` flag with a warning log on startup ([TRD FR-HTTP-1](TRD.md), [NFR-Sec-4](TRD.md)).
-- No authentication layer is implemented, and this is intentional, not a gap: loopback-only + single-user machine + read-only endpoints + no mutation routes = an acceptable posture for [PRD §7](../1_product/PRD.md)'s "No SaaS, single-user" constraint. This is sanctioned in [TRD §5.3 Assumption 3](TRD.md).
+- No authentication layer is implemented, and this is intentional, not a gap: loopback-only + single-user machine + read-only endpoints + no mutation routes = an acceptable posture for [PRD §7](../1_product_and_research/PRD.md)'s "No SaaS, single-user" constraint. This is sanctioned in [TRD §5.3 Assumption 3](TRD.md).
 - No telemetry, no auto-update checks, no usage pings — the only outbound connections are judge API calls initiated by explicit `plumb judge run` ([TRD NFR-Sec-6](TRD.md)).
 
 ### 8.4 SQL injection prevention
@@ -539,7 +539,7 @@ Five architectural decisions that shaped plumb v1. Each is "chosen / alternative
 
 - **Chosen:** SQLite (STRICT tables, WAL, single file).
 - **Alternatives:** Postgres (mature, concurrent), DuckDB (columnar, great for analytics).
-- **Rationale:** zero-ops matters more than any database feature. SQLite ships on every OS, has no server process, survives power loss via WAL, and — critically — supports `ATTACH DATABASE`, which reduces the `agentsview` backfill adapter to ~200 LOC of pure SQL ([TRD INT-ATTACH-1](TRD.md), [PRD §6](../1_product/PRD.md)). Postgres and DuckDB are both good; neither gives us a win at single-user scale and both cost us the "adopt in an afternoon" property. DuckDB specifically is a tempting analytics win but it can't substitute for transactional WAL writes on the hot path.
+- **Rationale:** zero-ops matters more than any database feature. SQLite ships on every OS, has no server process, survives power loss via WAL, and — critically — supports `ATTACH DATABASE`, which reduces the `agentsview` backfill adapter to ~200 LOC of pure SQL ([TRD INT-ATTACH-1](TRD.md), [PRD §6](../1_product_and_research/PRD.md)). Postgres and DuckDB are both good; neither gives us a win at single-user scale and both cost us the "adopt in an afternoon" property. DuckDB specifically is a tempting analytics win but it can't substitute for transactional WAL writes on the hot path.
 
 ### 10.3 One `openai_compat` adapter vs. per-provider adapters
 
@@ -551,7 +551,7 @@ Five architectural decisions that shaped plumb v1. Each is "chosen / alternative
 
 - **Chosen:** judges run only via explicit `plumb judge run`, never on the instrumented hot path.
 - **Alternatives:** Galileo/Patronus-style inline runtime blocking, with synchronous judge calls during the user's run.
-- **Rationale:** this is a philosophy split, not a research question (`[research/schema-and-metrics-v1.md](research/schema-and-metrics-v1.md#where-research-converges-where-it-splits)`). Inline guardrails would add hundreds of ms of network latency to every captured span, blowing the 1 ms budget ([TRD NFR-Perf-1/5](TRD.md)). plumb's thesis is that after-the-fact eval with `scorer_version` drift detection is the right default for a measurement spine; teams who need runtime blocking can layer it on top without touching plumb's schema.
+- **Rationale:** this is a philosophy split, not a research question (`[../1_product_and_research/schema-and-metrics-v1.md](../1_product_and_research/schema-and-metrics-v1.md#where-research-converges-where-it-splits)`). Inline guardrails would add hundreds of ms of network latency to every captured span, blowing the 1 ms budget ([TRD NFR-Perf-1/5](TRD.md)). plumb's thesis is that after-the-fact eval with `scorer_version` drift detection is the right default for a measurement spine; teams who need runtime blocking can layer it on top without touching plumb's schema.
 
 ### 10.5 Contextvars + monkey-patch vs. OpenTelemetry instrumentation
 
@@ -585,7 +585,7 @@ Architecture-level risks. Mirrors [TRD §12.2](TRD.md) but focused on the risks 
 Forward-compatibility seams deliberately preserved so that v1.1 / v2 work does not require schema migration. Each bullet references where the seam sits in the architecture.
 
 - **Long-running agents (v2).** `spans.parent_span_id` + `runs.parent_run_id` already support arbitrary nesting. Subgoal annotation can land as a new `spans.kind='plan'` usage pattern + a `scores` row per subgoal — no schema change.
-- **Surveys, ESM prompts, cost ledgers (v1.1+).** [PRD §7](../1_product/PRD.md) forbids a fifth table; the seams to absorb these are `runs.kind='survey'` and `scores.scorer='user_signal'`. Both are already allowed by existing `CHECK` constraints.
+- **Surveys, ESM prompts, cost ledgers (v1.1+).** [PRD §7](../1_product_and_research/PRD.md) forbids a fifth table; the seams to absorb these are `runs.kind='survey'` and `scores.scorer='user_signal'`. Both are already allowed by existing `CHECK` constraints.
 - **Alternative storage backends (v2).** `plumb/core/ports.py` declares `StorageWriter` and `StorageReader` Protocols. DuckDB or Postgres backends are drop-in alternates; `plumb/adapters/storage_*.py` is where they'd land.
 - **SLM judges at 100% coverage (v2).** `JudgeAdapter` accepts anything that satisfies the `score(metric, prompt, content, model) → JudgeResult` shape. Luna-2-style small-LM evaluators drop in as a third adapter without touching core.
 - **OpenTelemetry export (v2).** As an *additional* adapter emitting OTel spans from plumb spans — not a replacement for plumb's schema. This keeps `runs.kind` + `scores.scorer_version` intact while gaining interop with OTel-aware dashboards.

@@ -1,11 +1,11 @@
 # plumb — Technical Requirements Document (TRD)
 
-**Status:** Draft v1 — derived from [PRD](../1_product/PRD.md) (Phase 0 → Phase 1 hand-off)
+**Status:** Draft v1 — derived from [PRD](../1_product_and_research/PRD.md) (Phase 0 → Phase 1 hand-off)
 **Owner:** anant
 **Last updated:** 2026-04-23
 **Scope:** plumb v1 (Phase 1 ship, Week 6 target per PRD §8)
 
-> **Reading order.** This TRD is the text-heavy specification of *what to build, what rules it follows, how well it must perform.* The **"why"** lives in `[../1_product/PRD.md](../1_product/PRD.md)`. The **canonical schema + metric derivation** lives in `[./research/schema-and-metrics-v1.md](./research/schema-and-metrics-v1.md)` — reproduced in §7 with concrete SQL types and constraints. Options considered but not shipped in v1 are tracked in `[./deferred-features.md](./deferred-features.md)`.
+> **Reading order.** This TRD is the text-heavy specification of *what to build, what rules it follows, how well it must perform.* The **"why"** lives in `[../1_product_and_research/PRD.md](../1_product_and_research/PRD.md)`. The **canonical schema + metric derivation** lives in `[../1_product_and_research/schema-and-metrics-v1.md](../1_product_and_research/schema-and-metrics-v1.md)` — reproduced in §7 with concrete SQL types and constraints. Options considered but not shipped in v1 are tracked in `[./deferred-features.md](./deferred-features.md)`.
 
 ---
 
@@ -33,7 +33,7 @@ Non-technical summary for stakeholders: plumb is the piece of software that sits
 
 ### 2.1 PRD reference & business goals
 
-plumb exists to close the three instrumentation gaps identified in [PRD §1](../1_product/PRD.md):
+plumb exists to close the three instrumentation gaps identified in [PRD §1](../1_product_and_research/PRD.md):
 
 1. **Acceptance is invisible** in existing agent-telemetry tools — none emit the intervention rate that DevEx teams actually want.
 2. **Orchestrator-specific failures are uncategorized** — per Cemri et al.'s MAST taxonomy (arXiv:2503.13657), ~79% of multi-agent failures are specification or inter-agent misalignment, invisible to single-agent metrics.
@@ -414,7 +414,7 @@ The following are **NOT** integrations in v1 — called out so the TRD doesn't a
 
 ### 7.1 Schema — authoritative SQL
 
-The four tables are defined exactly as below. Schema reproduced from PRD §5 and `[./research/schema-and-metrics-v1.md](./research/schema-and-metrics-v1.md)`; this TRD adds concrete SQL types, constraints, and indexes.
+The four tables are defined exactly as below. Schema reproduced from PRD §5 and `[../1_product_and_research/schema-and-metrics-v1.md](../1_product_and_research/schema-and-metrics-v1.md)`; this TRD adds concrete SQL types, constraints, and indexes.
 
 ```sql
 -- plumb v1 schema. STRICT tables require SQLite >= 3.37.
