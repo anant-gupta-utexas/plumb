@@ -162,7 +162,7 @@ This maps directly to Fowler's "transactional surveys" concept — short, high-f
 
 ### The missing method: the longitudinal survey gap
 
-The schema naturally misses the third pillar: the **longitudinal survey**. The Personal OS operates at the microscopic "inner loop" — it excels at measuring friction of a specific run or cost of a single task, but SPACE/DevEx rely on periodic, macro-level assessments (satisfaction, psychological safety, DXI) that a Python decorator cannot effectively capture. You won't get good signal asking a developer to rate overall codebase health or quarterly collaboration quality from a `__exit__` hook.
+The schema naturally misses the third pillar: the **longitudinal survey**. plumb operates at the microscopic "inner loop" — it excels at measuring friction of a specific run or cost of a single task, but SPACE/DevEx rely on periodic, macro-level assessments (satisfaction, psychological safety, DXI) that a Python decorator cannot effectively capture. You won't get good signal asking a developer to rate overall codebase health or quarterly collaboration quality from a `__exit__` hook.
 
 **Options to close the gap:**
 
@@ -489,7 +489,7 @@ Compare same task types across models for matched intervention rates. This is Gi
 
 ### Positioning claim, in one breath
 
-By staking the above 12 metrics — several of them unique to this framework — the Personal OS transcends the legacy canon. It provides the industry's first native vocabulary for the realities of solo, agent-driven software development, proving that while AI makes code generation trivial, **measuring the true cognitive and economic cost of hybrid workflows is the ultimate engineering challenge of 2026**.
+By staking the above 12 metrics — several of them unique to this framework — plumb transcends the legacy canon. It provides a native vocabulary for the realities of solo, agent-driven software development, on the premise that while AI makes code generation trivial, **measuring the true cognitive and economic cost of hybrid workflows is the ultimate engineering challenge of 2026**.
 
 ---
 

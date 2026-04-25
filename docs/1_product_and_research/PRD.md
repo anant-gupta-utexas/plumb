@@ -8,9 +8,9 @@
 **Plumb measures what current agent-telemetry tools don't: whether a human
 actually accepted the agent's output, where the orchestrator routed, how
 sub-agents handed off, and what it cost to get the answer.** A small Python
-package + SQLite schema + two entry points. The keystone artifact for a
-multi-agent Personal OS; designed to generalize to any small DevEx / AI-ML /
-agentic-systems team.
+package + SQLite schema + two entry points. Designed for solo developers
+and small DevEx / AI-ML / agentic-systems teams instrumenting their own
+multi-agent workflow.
 
 ---
 
@@ -46,8 +46,9 @@ Ship a minimal, opinionated measurement spine that:
 - instruments multi-component agent systems (orchestrator, content pipeline,
   recommender, any sub-agent) from day one;
 - produces publishable data inside 8 weeks of instrumentation, supporting a
-  flagship write-up: *"I built a measurement framework, instrumented my
-  Personal OS with it, ran it for 8 weeks — here's what the data says."*
+  long-form write-up: *"I built a measurement framework, instrumented a
+  multi-agent system with it, ran it for 8 weeks — here's what the data
+  says."*
 
 ## 3. Audiences & framings
 
@@ -177,7 +178,7 @@ work to v2 or ignore.
 
 ## 8. Success metrics
 
-Tiered, covering both technical and portfolio outcomes.
+Tiered, covering both technical correctness and external reach.
 
 ### Tier 1 — technical (does it work?)
 
@@ -192,16 +193,16 @@ Tiered, covering both technical and portfolio outcomes.
 | Offline → online link         | `examples.origin_run_id` populated on ≥ 1 promoted case   | ≥ 10 promoted cases                             |
 | CI regression gate            | Regression run passes on 200-task set with paired McNemar | Same, under a cost budget                       |
 
-### Tier 2 — portfolio (does it earn attention?)
+### Tier 2 — reach (does it earn attention?)
 
-| Metric                           | v1 target (Week 6)               | Flagship (Week 11)                                               |
-| -------------------------------- | -------------------------------- | ---------------------------------------------------------------- |
-| Public GitHub repo               | README + install + quickstart    | Released, tagged v0.1                                            |
-| GitHub stars                     | ≥ 10                             | ≥ 50                                                             |
-| Build-journal posts citing plumb | ≥ 2                              | ≥ 6 (incl. flagship long-form)                                   |
-| LinkedIn/Substack engagement     | 1 post breaking 1k impressions   | Flagship post above 5k impressions                               |
-| Inbound signal                   | ≥ 1 DM referencing the framework | ≥ 5 DMs / recruiter messages                                     |
-| Reuse signal                     | ≥ 1 external fork or install     | ≥ 1 external team or person instrumenting their own work with it |
+| Metric                       | v1 target (Week 6)               | Flagship (Week 11)                                               |
+| ---------------------------- | -------------------------------- | ---------------------------------------------------------------- |
+| Public GitHub repo           | README + install + quickstart    | Released, tagged v0.1                                            |
+| GitHub stars                 | ≥ 10                             | ≥ 50                                                             |
+| Public posts citing plumb    | ≥ 2                              | ≥ 6 (incl. flagship long-form)                                   |
+| Long-form post engagement    | 1 post breaking 1k impressions   | Flagship post above 5k impressions                               |
+| Inbound signal               | ≥ 1 DM referencing the framework | ≥ 5 DMs from interested practitioners                            |
+| Reuse signal                 | ≥ 1 external fork or install     | ≥ 1 external team or person instrumenting their own work with it |
 
 The Tier-2 numbers are aspirational, not gating. The Tier-1 numbers are gating:
 if v1 ships without the schema stability and instrumented-components targets,

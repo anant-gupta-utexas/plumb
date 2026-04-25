@@ -39,7 +39,7 @@ plumb exists to close the three instrumentation gaps identified in [PRD §1](../
 2. **Orchestrator-specific failures are uncategorized** — per Cemri et al.'s MAST taxonomy (arXiv:2503.13657), ~79% of multi-agent failures are specification or inter-agent misalignment, invisible to single-agent metrics.
 3. **Offline and online live in different tools** — there is no minimal, public four-table reference implementation a small team can adopt in an afternoon.
 
-The business outcome is a portfolio-grade artifact: a single framework that serves DevEx, AI/ML, and agentic-systems audiences (PRD §3) and produces publishable data inside 8 weeks of instrumentation (PRD §2).
+The business outcome is a publishable artifact: a single framework that serves DevEx, AI/ML, and agentic-systems audiences (PRD §3) and produces real data inside 8 weeks of instrumentation (PRD §2).
 
 ### 2.2 Technical contribution to business outcomes
 
@@ -58,9 +58,9 @@ Every technical decision in this TRD ladders up to one of the PRD Tier-1 (gating
 | CI regression gate with paired McNemar on 200-task set    | §10 QA Requirements (reference regression run wired into CI) + `plumb.stats` module for paired McNemar + BH-FDR correction |
 
 
-### 2.3 Tier-2 (portfolio) objectives
+### 2.3 Tier-2 (reach) objectives
 
-PRD §8 Tier-2 (GitHub stars, LinkedIn engagement, reuse signal) are aspirational, not gating. The TRD's obligation is to not *prevent* them: public repo, clean README, `pip install plumb` works on a fresh machine, quickstart runs in under a minute.
+PRD §8 Tier-2 (GitHub stars, public-post engagement, reuse signal) are aspirational, not gating. The TRD's obligation is to not *prevent* them: public repo, clean README, `pip install plumb` works on a fresh machine, quickstart runs in under a minute.
 
 ---
 
