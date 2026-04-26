@@ -15,32 +15,32 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 1.1 — Delete legacy `src/` tree [S]
 
-- [ ] `src/` directory deleted
-- [ ] `tests/unit/domain/`, `tests/unit/application/` deleted
-- [ ] `tests/conftest.py` has no `from src.* import` lines
-- [ ] `pytest --collect-only` succeeds with zero collection errors
-- [ ] `main.py` checked for `src.*` references; updated if present
+- [x] `src/` directory deleted
+- [x] `tests/unit/domain/`, `tests/unit/application/` deleted
+- [x] `tests/conftest.py` has no `from src.* import` lines
+- [x] `pytest --collect-only` succeeds with zero collection errors
+- [x] `main.py` checked for `src.*` references; updated if present
 
 ### Task 1.2 — Create `plumb/` package skeleton [S]
 
-- [ ] `plumb/__init__.py` exists with `__version__ = "0.1.0"`
-- [ ] `plumb/core/__init__.py`, `entities.py`, `ports.py`, `stats.py`, `errors.py` created (placeholders OK)
-- [ ] `plumb/api.py`, `plumb/config.py` created (placeholders OK)
-- [ ] `pyproject.toml` declares `packages = ["plumb"]`
-- [ ] `python -c "import plumb; print(plumb.__version__)"` prints `0.1.0`
+- [x] `plumb/__init__.py` exists with `__version__ = "0.1.0"`
+- [x] `plumb/core/__init__.py`, `entities.py`, `ports.py`, `stats.py`, `errors.py` created (placeholders OK)
+- [x] `plumb/api.py`, `plumb/config.py` created (placeholders OK)
+- [x] `pyproject.toml` declares `packages = ["plumb"]`
+- [x] `python -c "import plumb; print(plumb.__version__)"` prints `0.1.0`
 
 ### Task 1.3 — Wire `ruff` + `mypy --strict` config [S]
 
-- [ ] `pyproject.toml` has `[tool.ruff]` block (line-length, target-version 3.13)
-- [ ] `pyproject.toml` has `[tool.mypy]` block with `strict = true` for `plumb/core/`
-- [ ] `ruff check plumb/` exits 0
-- [ ] `mypy --strict plumb/core/` exits 0
-- [ ] `pyproject.toml` has `[tool.pytest.ini_options]` registering `perf` marker
+- [x] `pyproject.toml` has `[tool.ruff]` block (line-length, target-version 3.13)
+- [x] `pyproject.toml` has `[tool.mypy]` block with `strict = true` for `plumb/core/`
+- [x] `ruff check plumb/` exits 0
+- [x] `mypy --strict plumb/core/` exits 0
+- [x] `pyproject.toml` has `[tool.pytest.ini_options]` registering `perf` marker
 
 **Phase 1 deliverables:**
-- [ ] Empty `plumb/` package importable
-- [ ] Legacy `src/` removed
-- [ ] Lint + type tooling configured
+- [x] Empty `plumb/` package importable
+- [x] Legacy `src/` removed
+- [x] Lint + type tooling configured
 
 ---
 
@@ -50,35 +50,35 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 2.1 — Implement `plumb/core/errors.py` [S]
 
-- [ ] `PlumbError`, `StorageError`, `BlobNotFoundError`, `ValidationError`, `JudgeError` defined
-- [ ] All inherit from `PlumbError` (verified by `isinstance` test)
-- [ ] All have docstrings
-- [ ] `tests/unit/core/test_errors.py` exists; tests pass
-- [ ] Coverage ≥ 90%
+- [x] `PlumbError`, `StorageError`, `BlobNotFoundError`, `ValidationError`, `JudgeError` defined
+- [x] All inherit from `PlumbError` (verified by `isinstance` test)
+- [x] All have docstrings
+- [x] `tests/unit/core/test_errors.py` exists; tests pass
+- [x] Coverage ≥ 90%
 
 ### Task 2.2 — Implement enums in `plumb/core/entities.py` [S]
 
-- [ ] `RunKind`, `RunStatus`, `SpanKind`, `SpanStatus`, `ScorerKind`, `ExampleSource` defined as `StrEnum`
-- [ ] Each enum value matches TRD §7.1 CHECK string literal exactly (verified by per-enum test)
-- [ ] `tests/unit/core/test_entities.py::test_enum_values_match_trd_check_constraints` passes
+- [x] `RunKind`, `RunStatus`, `SpanKind`, `SpanStatus`, `ScorerKind`, `ExampleSource` defined as `StrEnum`
+- [x] Each enum value matches TRD §7.1 CHECK string literal exactly (verified by per-enum test)
+- [x] `tests/unit/core/test_entities.py::test_enum_values_match_trd_check_constraints` passes
 
 ### Task 2.3 — Implement entity dataclasses [M]
 
-- [ ] `Run`, `Span`, `Score`, `Example`, `JudgeResult`, `McNemarResult` defined
-- [ ] All `@dataclass(frozen=True, slots=True)`
-- [ ] `__post_init__` enforces invariants per plan §3.2.2
-- [ ] Each invariant has at least one failing-input test
-- [ ] `dataclasses.replace(run, end_ts=...)` produces a valid new `Run`
-- [ ] `Score` XOR (`value_numeric` xor `value_label`) enforced; both/neither raise `ValidationError`
-- [ ] Hash-format invariants (32-hex IDs, 64-hex content hashes) enforced
-- [ ] `mypy --strict plumb/core/entities.py` clean
-- [ ] Hypothesis property test: valid-input round-trip
-- [ ] Coverage ≥ 95%
+- [x] `Run`, `Span`, `Score`, `Example`, `JudgeResult`, `McNemarResult` defined
+- [x] All `@dataclass(frozen=True, slots=True)`
+- [x] `__post_init__` enforces invariants per plan §3.2.2
+- [x] Each invariant has at least one failing-input test
+- [x] `dataclasses.replace(run, end_ts=...)` produces a valid new `Run`
+- [x] `Score` XOR (`value_numeric` xor `value_label`) enforced; both/neither raise `ValidationError`
+- [x] Hash-format invariants (32-hex IDs, 64-hex content hashes) enforced
+- [x] `mypy --strict plumb/core/entities.py` clean
+- [x] Hypothesis property test: valid-input round-trip
+- [x] Coverage ≥ 95%
 
 **Phase 2 deliverables:**
-- [ ] All entities + errors implemented
-- [ ] Coverage targets met
-- [ ] `mypy --strict plumb/core/` still clean
+- [x] All entities + errors implemented
+- [x] Coverage targets met
+- [x] `mypy --strict plumb/core/` still clean
 
 ---
 
