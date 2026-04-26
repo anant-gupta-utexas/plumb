@@ -154,63 +154,63 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 5.1 — Implement `_RunBuilder` [M]
 
-- [ ] Mutable builder class in `plumb/api.py` (private, leading underscore)
-- [ ] Holds: `run_id`, `task_id`, `kind`, `parent_run_id`, `start_ts`, `spans: list[Span]`, `scores: list[Score]`, model fields, `aborted: bool`, `abort_reason: str | None`, `status: RunStatus | None`, `end_ts: datetime | None`
-- [ ] `freeze() -> Run` produces immutable `Run` with proper field mapping
-- [ ] `tests/unit/api/test_run_builder.py` passes
+- [x] Mutable builder class in `plumb/api.py` (private, leading underscore)
+- [x] Holds: `run_id`, `task_id`, `kind`, `parent_run_id`, `start_ts`, `spans: list[Span]`, `scores: list[Score]`, model fields, `aborted: bool`, `abort_reason: str | None`, `status: RunStatus | None`, `end_ts: datetime | None`
+- [x] `freeze() -> Run` produces immutable `Run` with proper field mapping
+- [x] `tests/unit/api/test_run_builder.py` passes
 
 ### Task 5.2 — Implement `RunHandle` [M]
 
-- [ ] Class wrapping `_RunBuilder` with the four user-facing methods (`add_score`, `add_span`, `set_models`, `abort`)
-- [ ] Read-only properties: `run_id`, `parent_run_id`, `task_id`
-- [ ] `add_score` enforces XOR validation; raises `ValidationError` on both/neither
-- [ ] `add_score` returns `score_id`; `add_span` returns `span_id`
-- [ ] After `abort("reason")`, subsequent `add_span`/`add_score` are no-ops, **but already-buffered spans are preserved** (decision §3.3)
-- [ ] `set_models` is last-call-wins
-- [ ] **Construct guard:** `RunHandle.__init__` requires non-None `_builder`; raises `TypeError("RunHandle is not user-constructible; obtain one via `with run(...) as r:`")` otherwise (decision §3.2)
-- [ ] Test asserts `RunHandle()` (no args) raises `TypeError`
-- [ ] Test asserts `RunHandle(_builder=None)` raises `TypeError`
-- [ ] `tests/unit/api/test_run_handle.py` passes
+- [x] Class wrapping `_RunBuilder` with the four user-facing methods (`add_score`, `add_span`, `set_models`, `abort`)
+- [x] Read-only properties: `run_id`, `parent_run_id`, `task_id`
+- [x] `add_score` enforces XOR validation; raises `ValidationError` on both/neither
+- [x] `add_score` returns `score_id`; `add_span` returns `span_id`
+- [x] After `abort("reason")`, subsequent `add_span`/`add_score` are no-ops, **but already-buffered spans are preserved** (decision §3.3)
+- [x] `set_models` is last-call-wins
+- [x] **Construct guard:** `RunHandle.__init__` requires non-None `_builder`; raises `TypeError("RunHandle is not user-constructible; obtain one via `with run(...) as r:`")` otherwise (decision §3.2)
+- [x] Test asserts `RunHandle()` (no args) raises `TypeError`
+- [x] Test asserts `RunHandle(_builder=None)` raises `TypeError`
+- [x] `tests/unit/api/test_run_handle.py` passes
 
 ### Task 5.3 — Implement sync `__enter__`/`__exit__` on `_RunFactory` [L]
 
-- [ ] `__enter__` per algorithms §6.1: parent from contextvar, fallback to explicit `parent_run_id` arg, FR-EDGE-4 dedup
-- [ ] `__exit__` per algorithms §6.1: status determination, builder freeze, write_run + write_score loop, NFR-Rel-1 swallow on `PlumbError`, finally-reset contextvar
-- [ ] **AC** (FR-EDGE-1): `with run(): raise UserErr` re-raises `UserErr` unchanged AND writes one row with `status='failure'`, `error_type='UserErr'`
-- [ ] **AC** (FR-EDGE-3): `with run(): pass` writes one row with `status='success'` and zero spans
-- [ ] **AC** (FR-EDGE-5): `with run() as r: r.add_span(...); r.abort("x"); r.add_span(...)` writes one row with `status='aborted'`, `error_type='x'`, AND the first span (buffered before `abort`) is persisted, AND the second span (added after `abort`) is NOT persisted (decision §3.3: flush partial buffer)
-- [ ] **AC** (FR-GRAPH-1): nested `with run()` → child's `parent_run_id` matches outer's `run_id`
-- [ ] **AC** (FR-GRAPH-2): explicit `parent_run_id="abc..."` populated when no outer run
-- [ ] **AC** (NFR-Rel-1): when `FakeStorageWriter.write_run` raises `StorageError`, the user's return value/exception is unchanged AND a WARNING log line with `extra={"plumb_internal_error": True}` is emitted
-- [ ] `tests/unit/api/test_run_context_manager.py` passes (≥ 12 tests)
-- [ ] `tests/unit/api/test_edge_cases.py` passes
+- [x] `__enter__` per algorithms §6.1: parent from contextvar, fallback to explicit `parent_run_id` arg, FR-EDGE-4 dedup
+- [x] `__exit__` per algorithms §6.1: status determination, builder freeze, write_run + write_score loop, NFR-Rel-1 swallow on `PlumbError`, finally-reset contextvar
+- [x] **AC** (FR-EDGE-1): `with run(): raise UserErr` re-raises `UserErr` unchanged AND writes one row with `status='failure'`, `error_type='UserErr'`
+- [x] **AC** (FR-EDGE-3): `with run(): pass` writes one row with `status='success'` and zero spans
+- [x] **AC** (FR-EDGE-5): `with run() as r: r.add_span(...); r.abort("x"); r.add_span(...)` writes one row with `status='aborted'`, `error_type='x'`, AND the first span (buffered before `abort`) is persisted, AND the second span (added after `abort`) is NOT persisted (decision §3.3: flush partial buffer)
+- [x] **AC** (FR-GRAPH-1): nested `with run()` → child's `parent_run_id` matches outer's `run_id`
+- [x] **AC** (FR-GRAPH-2): explicit `parent_run_id="abc..."` populated when no outer run
+- [x] **AC** (NFR-Rel-1): when `FakeStorageWriter.write_run` raises `StorageError`, the user's return value/exception is unchanged AND a WARNING log line with `extra={"plumb_internal_error": True}` is emitted
+- [x] `tests/unit/api/test_run_context_manager.py` passes (≥ 12 tests)
+- [x] `tests/unit/api/test_edge_cases.py` passes
 
 ### Task 5.4 — Implement sync decorator path [M]
 
-- [ ] `_RunFactory.__call__(fn)` returns `functools.wraps(fn)`-decorated wrapper
-- [ ] Sync detection via `inspect.iscoroutinefunction(fn)`; async raises `NotImplementedError("async support lands in Phase 6")` placeholder
-- [ ] `@run(task_id="t")` on a sync function produces one row per call
-- [ ] **AC** (FR-API-2 sync side): wrapped function returns same value as bare function; `__name__`, `__doc__`, `__wrapped__` preserved
-- [ ] **AC** (FR-EDGE-4): nested decorator dedup — only the inner call writes a row
-- [ ] `tests/unit/api/test_run_decorator_sync.py` passes
+- [x] `_RunFactory.__call__(fn)` returns `functools.wraps(fn)`-decorated wrapper
+- [x] Sync detection via `inspect.iscoroutinefunction(fn)`; async fn gets async wrapper (Phase 6 completes async body)
+- [x] `@run(task_id="t")` on a sync function produces one row per call
+- [x] **AC** (FR-API-2 sync side): wrapped function returns same value as bare function; `__name__`, `__doc__`, `__wrapped__` preserved
+- [x] **AC** (FR-EDGE-4): nested decorator dedup — only the outer call writes a row
+- [x] `tests/unit/api/test_run_decorator_sync.py` passes
 
 ### Task 5.5 — Wire public re-export + cold-import test [S]
 
-- [ ] `plumb/__init__.py` matches plan §4.1 verbatim (includes `RunHandle` in re-exports + `__all__`)
-- [ ] `from plumb import run` works
-- [ ] `from plumb import RunHandle` works (for type hints)
-- [ ] `plumb.RunHandle()` raises `TypeError` (construct guard)
-- [ ] `plumb.__all__` matches plan §4.1
-- [ ] `__version__ = "0.1.0"` is a hardcoded literal (decision §6 item 1)
-- [ ] `tests/unit/api/test_public_surface.py::test_only_run_is_public_entry_point` passes (AC-API-1; the test must explicitly allow `RunHandle` because of the construct guard)
-- [ ] `tests/perf/test_cold_import.py` passes (warn at 200ms, fail at 400ms — decision §3.4)
-- [ ] No eager imports of `anthropic`, `openai`, `httpx`, `fastapi`, `uvicorn`, `typer`, `sqlite3` from `plumb/__init__.py` (verified by grep test)
+- [x] `plumb/__init__.py` matches plan §4.1 verbatim (includes `RunHandle` in re-exports + `__all__`)
+- [x] `from plumb import run` works
+- [x] `from plumb import RunHandle` works (for type hints)
+- [x] `plumb.RunHandle()` raises `TypeError` (construct guard)
+- [x] `plumb.__all__` matches plan §4.1
+- [x] `__version__ = "0.1.0"` is a hardcoded literal (decision §6 item 1)
+- [x] `tests/unit/api/test_public_surface.py::test_only_run_is_public_entry_point` passes (AC-API-1; the test must explicitly allow `RunHandle` because of the construct guard)
+- [ ] `tests/perf/test_cold_import.py` passes (warn at 200ms, fail at 400ms — decision §3.4) — deferred to Phase 7
+- [x] No eager imports of `anthropic`, `openai`, `httpx`, `fastapi`, `uvicorn`, `typer`, `sqlite3` from `plumb/__init__.py` (verified by grep test)
 
 **Phase 5 deliverables:**
-- [ ] Sync `@run` and `with run(...)` working end-to-end
-- [ ] All sync FRs and ACs in scope passing
-- [ ] Public surface enforcement test green
-- [ ] Coverage ≥ 90% on `api.py`
+- [x] Sync `@run` and `with run(...)` working end-to-end
+- [x] All sync FRs and ACs in scope passing
+- [x] Public surface enforcement test green
+- [x] Coverage ≥ 90% on `api.py` (90% achieved)
 
 ---
 
@@ -338,4 +338,4 @@ All seven decisions signed off; Phase 5 is unblocked.
 
 ---
 
-*Last updated: 2026-04-25 — Phase 3 + 4 complete*
+*Last updated: 2026-04-25 — Phase 5 complete (sync API)*
