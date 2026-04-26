@@ -38,9 +38,6 @@ with run(task_id="atlas.stage5.codegen", kind="online") as r:
 ```
 
 ## Project Structure
-
-> **Transitional note.** The `src/domain|application|infrastructure/` folders on disk are empty scaffolding from an earlier template. The authoritative layout for v1 code is the `plumb/` ports-and-adapters shape below (per [CLAUDE.md](CLAUDE.md) and [SDD §3](docs/2_architecture/SYSTEM_DESIGN.md)); the `src/` skeleton will be removed / renamed at first-code time.
-
 ```
 plumb/
 ├── core/        # Pure-Python core: entities, ports (Protocols), stats
