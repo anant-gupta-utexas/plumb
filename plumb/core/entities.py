@@ -176,9 +176,7 @@ class Score:
         numeric_set = self.value_numeric is not None
         label_set = self.value_label is not None
         if numeric_set == label_set:
-            raise ValidationError(
-                "Exactly one of value_numeric or value_label must be set (XOR)"
-            )
+            raise ValidationError("Exactly one of value_numeric or value_label must be set (XOR)")
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,9 +219,7 @@ class JudgeResult:
         numeric_set = self.value_numeric is not None
         label_set = self.value_label is not None
         if numeric_set == label_set:
-            raise ValidationError(
-                "Exactly one of value_numeric or value_label must be set (XOR)"
-            )
+            raise ValidationError("Exactly one of value_numeric or value_label must be set (XOR)")
 
 
 @dataclass(frozen=True, slots=True)
