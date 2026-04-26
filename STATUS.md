@@ -11,24 +11,33 @@ blocked_on: null
 
 ## Current
 
-Scaffold and docs complete. PRD, TRD, and SDD are in place. v1 schema
-(`runs`, `spans`, `scores`, `examples`) is defined. Core Python package
-structure is laid out under Clean Architecture. Focus is on making the
-package installable as a local path dependency so atlas can pin to a
-commit SHA in its `pyproject.toml`.
+v1 core + API complete. `plumb/core/` (entities, ports, stats, errors) and
+`plumb/api.py` (sync+async decorator + context-manager) shipped with full
+test coverage (≥90%) and performance gates (p95 ≤1ms span overhead, cold
+import ≤200ms). Next: storage adapter (SQLite), CLI, HTTP service, and
+judge adapters to unlock end-to-end integration with atlas.
 
 ## Recent (last 7 days)
 
-- SDD added: ports-and-adapters layout documented, v1 schema locked.
-- TRD added: NFRs, integration contract, deferred-features backlog.
-- Docs structure aligned to `1_product_and_research` / `2_architecture`
-  / `3_guides` / `4_testing` pattern.
+- v1-core-and-api: all 8 phases complete (Phase 1–7 in dev, Phase 8 docs).
+- Implemented `Run`, `Span`, `Score`, `Example` frozen dataclasses with
+  invariant validation; `Clock`, `IdGenerator`, `StorageWriter`,
+  `StorageReader`, `BlobStore`, `JudgeAdapter` Protocols.
+- `@run` decorator + `with run(...) as r:` for sync + async; `RunHandle`
+  methods (`add_span`, `add_score`, `set_models`, `abort`) fully wired.
+- McNemar's paired test + Benjamini-Hochberg FDR pure-function stats.
+- CI gates: ruff format/check, mypy --strict, pytest with 90% coverage,
+  perf benchmarks, cold import ≤200ms warn / 400ms fail.
 
 ## Next
 
-- Implement `runs` / `spans` / `scores` / `examples` write path via
-  decorator + context-manager API.
-- Expose `plumb.api` surface atlas will call directly (in-process).
+- Implement v1-storage-adapter: SQLite STRICT tables, WAL mode, foreign
+  keys enforcement; replace in-memory fake with real `StorageWriter`.
+- Implement v1-autocapture: monkey-patch hooks for `anthropic`, `openai`,
+  `httpx` SDKs to auto-capture spans.
+- Implement v1-cli: typer commands for `stats`, `serve`, `judge run`.
+- Implement v1-http: FastAPI read-only service (port 8765).
+- Implement v1-judge-adapters: Anthropic + OpenAI/OpenRouter compat.
 - Tag `v1.0` once atlas Day 2 integration test passes end-to-end.
 
 ## Blocked / waiting
