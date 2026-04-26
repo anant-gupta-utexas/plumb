@@ -88,34 +88,38 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 3.1 — Implement `plumb/core/ports.py` [S]
 
-- [ ] All six Protocols defined: `Clock`, `IdGenerator`, `StorageWriter`, `StorageReader`, `BlobStore`, `JudgeAdapter`
-- [ ] No imports from `plumb.adapters.*` or `plumb.api`
-- [ ] `mypy --strict plumb/core/ports.py` clean
-- [ ] `tests/unit/core/test_ports_compliance.py`: hand-built fakes satisfy each Protocol via `isinstance` (with `@runtime_checkable` decoration on Protocols that need it)
+- [x] All six Protocols defined: `Clock`, `IdGenerator`, `StorageWriter`, `StorageReader`, `BlobStore`, `JudgeAdapter`
+- [x] No imports from `plumb.adapters.*` or `plumb.api`
+- [x] `mypy --strict plumb/core/ports.py` clean
+- [x] `tests/unit/core/test_ports_compliance.py`: hand-built fakes satisfy each Protocol via `isinstance` (with `@runtime_checkable` decoration on Protocols that need it)
 
 ### Task 3.2 — Implement `mcnemar_paired` [M]
 
-- [ ] Function signature matches plan §3.4
-- [ ] Algorithm matches algorithms doc §6.3
-- [ ] Uses `math.erf` (no SciPy dep)
-- [ ] Five known-answer reference cases pass within 1e-6
-- [ ] Cross-check against scipy's reference values (gated behind `pytest.importorskip("scipy")`)
-- [ ] Raises `ValueError` if input lengths differ or `n_discordant < 1`
-- [ ] Hypothesis property test: p-value monotone w.r.t. `|b - c|` for fixed total
+- [x] Function signature matches plan §3.4
+- [x] Algorithm matches algorithms doc §6.3
+- [x] Uses `math.erf` (no SciPy dep)
+- [x] Five known-answer reference cases pass within 1e-6
+- [x] Cross-check against scipy's reference values (gated behind `pytest.importorskip("scipy")`)
+- [x] Raises `ValueError` if input lengths differ or `n_discordant < 1`
+- [x] Hypothesis property test: p-value monotone w.r.t. `|b - c|` for fixed total
+
+> **Note:** Reference values in algorithms doc §6.3 were incorrect for the Yates-corrected formula. Correct values (verified against `scipy.stats.chi2.sf`): b=10,c=2 → p≈0.04331; b=5,c=5 → p≈0.7518; b=20,c=0 → p≈2.152e-5; b=100,c=50 → p≈6.312e-5.
 
 ### Task 3.3 — Implement `benjamini_hochberg` [S]
 
-- [ ] Function signature matches plan §3.4
-- [ ] Algorithm matches algorithms doc §6.4
-- [ ] Three reference cases match R `p.adjust(p, method="BH")` golden values
-- [ ] Edge: empty input → empty output (no error)
-- [ ] Edge: all p-values > alpha → all False
-- [ ] Hypothesis property: rejected p-values are a prefix in sorted order
+- [x] Function signature matches plan §3.4
+- [x] Algorithm matches algorithms doc §6.4
+- [x] Three reference cases pass (doc's case 1 corrected: only p=0.01 of [0.01,0.04,0.03,0.5] is rejected)
+- [x] Edge: empty input → empty output (no error)
+- [x] Edge: all p-values > alpha → all False
+- [x] Hypothesis property: rejected p-values are a prefix in sorted order
+
+> **Note:** Algorithms doc §6.4 reference case 1 was wrong. For `[0.01, 0.04, 0.03, 0.5]` at α=0.05: only index 0 (p=0.01) is rejected; the BH threshold for rank 2 is 0.025 < 0.03.
 
 **Phase 3 deliverables:**
-- [ ] All ports declared
-- [ ] McNemar + BH-FDR working with golden tests
-- [ ] Coverage ≥ 95% on `stats.py`
+- [x] All ports declared
+- [x] McNemar + BH-FDR working with golden tests
+- [x] Coverage ≥ 95% on `stats.py` (100% achieved)
 
 ---
 
@@ -125,16 +129,16 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 4.1 — Implement `Settings` + `get_settings` [S]
 
-- [ ] `Settings(BaseSettings)` with `env_prefix="PLUMB_"`, `case_sensitive=False`
-- [ ] Three fields: `data_dir: Path`, `log_level: str`, `autocapture: bool` (defaults per plan §3.7)
-- [ ] `get_settings()` is `@lru_cache(maxsize=1)`
-- [ ] Test: `monkeypatch.setenv("PLUMB_DATA_DIR", "/tmp/test"); get_settings.cache_clear()` produces matching settings
-- [ ] Test: `data_dir` resolves to `Path`, not `str`
-- [ ] `tests/unit/test_config.py` passes
-- [ ] Coverage ≥ 85%
+- [x] `Settings(BaseSettings)` with `env_prefix="PLUMB_"`, `case_sensitive=False`
+- [x] Three fields: `data_dir: Path`, `log_level: str`, `autocapture: bool` (defaults per plan §3.7)
+- [x] `get_settings()` is `@lru_cache(maxsize=1)`
+- [x] Test: `monkeypatch.setenv("PLUMB_DATA_DIR", "/tmp/test"); get_settings.cache_clear()` produces matching settings
+- [x] Test: `data_dir` resolves to `Path`, not `str`
+- [x] `tests/unit/test_config.py` passes
+- [x] Coverage ≥ 85% (100% achieved)
 
 **Phase 4 deliverables:**
-- [ ] Env-driven config working
+- [x] Env-driven config working
 
 ---
 
@@ -334,4 +338,4 @@ All seven decisions signed off; Phase 5 is unblocked.
 
 ---
 
-*Last updated: 2026-04-25*
+*Last updated: 2026-04-25 — Phase 3 + 4 complete*
