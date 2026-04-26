@@ -291,26 +291,26 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 8.1 — Rewrite `docs/3_guides/core_concepts.md` [M]
 
-- [ ] Document references actual entities (`Run`, `Span`, `Score`, `Example`), not legacy `User`/`UserCRUD`
-- [ ] At least one diagram or code snippet showing ports-and-adapters layout
-- [ ] Worked example using `with run(...) as r:` from plan §3.6
+- [x] Document references actual entities (`Run`, `Span`, `Score`, `Example`), not legacy `User`/`UserCRUD`
+- [x] At least one diagram or code snippet showing ports-and-adapters layout
+- [x] Worked example using `with run(...) as r:` from plan §3.6
 - [ ] User signs off
 
 ### Task 8.2 — Update `docs/3_guides/getting_started.md` quickstart [S]
 
-- [ ] Quickstart shows `pip install plumb` (or `uv sync`), then a 10-line `@run` script
-- [ ] Notes that storage is in-memory until storage TRS lands (or shows expected output)
+- [x] Quickstart shows `pip install plumb` (or `uv sync`), then a 10-line `@run` script
+- [x] Notes that storage is in-memory until storage TRS lands (or shows expected output)
 - [ ] Runs end-to-end on a fresh checkout
 
 ### Task 8.3 — Archive this slice [S]
 
 - [ ] PR merged to `main`
-- [ ] `dev/active/v1-core-and-api/` moved to `dev/archive/v1-core-and-api/`
-- [ ] Per CLAUDE.md workflow
+- [x] `dev/active/v1-core-and-api/` moved to `dev/archive/v1-core-and-api/`
+- [x] Per CLAUDE.md workflow
 
 **Phase 8 deliverables:**
-- [ ] Evergreen docs accurate
-- [ ] Slice archived
+- [x] Evergreen docs accurate
+- [x] Slice archived
 
 ---
 
@@ -338,4 +338,4 @@ All seven decisions signed off; Phase 5 is unblocked.
 
 ---
 
-*Last updated: 2026-04-25 — Phases 6 & 7 complete (async API + perf benchmarks + CI)*
+*Last updated: 2026-04-25 — Phase 8 complete (docs + archive); pending: user sign-off on docs, PR merge, end-to-end quickstart verification*
