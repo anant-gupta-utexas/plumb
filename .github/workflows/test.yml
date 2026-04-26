@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    name: "test / py3.13 / ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python 3.13
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Lint — ruff check
+        run: uv run ruff check plumb/
+
+      - name: Lint — ruff format check
+        run: uv run ruff format --check plumb/
+
+      - name: Type check — mypy strict (core)
+        run: uv run mypy --strict plumb/core/
+
+      - name: Tests — unit + perf (with coverage)
+        id: pytest
+        run: |
+          uv run pytest \
+            --cov=plumb \
+            --cov-report=term \
+            --cov-fail-under=90 \
+            -v \
+            tests/unit/ tests/perf/ \
+            2>&1 | tee pytest-output.txt
+          exit ${PIPESTATUS[0]}
+
+      - name: Report p95 span overhead
+        if: always()
+        run: |
+          echo "=== Perf summary ===" && \
+          grep -E "p50=|p95=|p99=|cold import" pytest-output.txt || true
