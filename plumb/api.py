@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from plumb.core.entities import (
+    Example,
     Run,
     RunKind,
     RunStatus,
@@ -68,10 +69,13 @@ class _NoopStorageWriter:
     def write_score(self, score: Score) -> None:
         pass
 
+    def write_example(self, example: Example) -> None:
+        pass
+
 
 _clock: Clock = _DefaultClock()
 _id_gen: IdGenerator = _DefaultIdGenerator()
-_storage_writer: StorageWriter = _NoopStorageWriter()  # type: ignore[assignment]
+_storage_writer: StorageWriter = _NoopStorageWriter()
 
 # ---------------------------------------------------------------------------
 # Contextvar — tracks the active RunHandle in the current task/thread
