@@ -319,8 +319,8 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 - [x] `ruff check plumb/` — zero errors
 - [x] `ruff format --check plumb/` — zero diffs
 - [x] `mypy --strict plumb/core/` — zero errors
-- [x] `pytest tests/unit/ tests/perf/` — all pass (174 passed)
-- [x] `pytest --cov=plumb --cov-report=term --cov-fail-under=90` — threshold met (98.41%)
+- [x] `pytest tests/unit/ tests/perf/` — all pass (178 passed after code-review fixes)
+- [x] `pytest --cov=plumb --cov-report=term --cov-fail-under=90` — threshold met (98%+)
 - [x] No eager imports of network/HTTP libraries from `plumb/__init__.py`
 - [x] Cold import ≤ 200 ms (warn) / ≤ 400 ms (hard fail) — measured 19.5 ms
 
@@ -338,4 +338,18 @@ All seven decisions signed off; Phase 5 is unblocked.
 
 ---
 
-*Last updated: 2026-04-25 — Phase 8 complete (docs + archive); pending: user sign-off on docs, PR merge, end-to-end quickstart verification*
+---
+
+## Post-merge code review fixes (2026-04-26)
+
+Applied after review in `v1-core-and-api-code-review.md`. All 178 tests pass.
+
+- [x] **Important — NFR-Rel-1 gap:** broadened `except PlumbError` → `except Exception` in `__exit__` so non-`PlumbError` adapter exceptions (e.g. `sqlite3.OperationalError`) are also swallowed and logged
+- [x] **Important — §9.2 log injection:** removed raw user content (`value!r`) from `_require_hex32`/`_require_hex64` `ValidationError` messages; added 4 tests verifying no control chars leak
+- [x] **Minor — typo:** renamed `_dedupd` → `_deduped` in `_RunFactory.__slots__` and all uses
+- [x] **Minor — imports:** moved `import uuid` and inline `datetime`/`UTC` imports to module top in `plumb/api.py`
+- [x] **Minor — perf test Protocol compliance:** added `write_example` to `_NullWriter`
+- [x] **Minor — test coverage:** added `status`/`error_type` assertions to `test_base_exception_propagates`
+- [x] **Minor — test teardown:** replaced manual `try/finally` singleton mutation with `monkeypatch` fixture in `test_span_overhead.py`
+
+*Last updated: 2026-04-26 — code-review fixes applied; slice fully closed*

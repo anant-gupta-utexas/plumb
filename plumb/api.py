@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import inspect
 import logging
+import uuid
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar, Token
 from datetime import datetime
@@ -33,30 +34,22 @@ logger = logging.getLogger(__name__)
 
 class _DefaultClock:
     def now(self) -> datetime:
-        import datetime as _dt
+        from datetime import UTC
 
-        return _dt.datetime.now(tz=_dt.UTC)
+        return datetime.now(tz=UTC)
 
 
 class _DefaultIdGenerator:
     def new_run_id(self) -> str:
-        import uuid
-
         return uuid.uuid4().hex
 
     def new_span_id(self) -> str:
-        import uuid
-
         return uuid.uuid4().hex
 
     def new_score_id(self) -> str:
-        import uuid
-
         return uuid.uuid4().hex
 
     def new_example_id(self) -> str:
-        import uuid
-
         return uuid.uuid4().hex
 
 
@@ -312,7 +305,7 @@ class _RunFactory:
         "git_sha",
         "_is_decorator_call",
         "_frame_id",
-        "_dedupd",
+        "_deduped",
         "_token",
         "_handle",
     )
@@ -339,14 +332,14 @@ class _RunFactory:
         self.git_sha = git_sha
         self._is_decorator_call: bool = False
         self._frame_id: int | None = None
-        self._dedupd: bool = False
+        self._deduped: bool = False
         self._token: Token[RunHandle | None] | None = None
         self._handle: RunHandle | None = None
 
     # -- context manager (sync) -----------------------------------------------
 
     def __enter__(self) -> RunHandle:
-        self._dedupd = False
+        self._deduped = False
         parent_handle = _active_run.get()
 
         # FR-GRAPH-1 / FR-GRAPH-2: resolve parent
@@ -360,7 +353,7 @@ class _RunFactory:
             and parent_handle is not None
             and parent_handle._open_frame_id == self._frame_id
         ):
-            self._dedupd = True
+            self._deduped = True
             self._handle = parent_handle
             return parent_handle
 
@@ -389,7 +382,7 @@ class _RunFactory:
         exc_val: BaseException | None,
         exc_tb: Any,
     ) -> bool:
-        if self._dedupd:
+        if self._deduped:
             return False  # outer no-op; never suppresses
 
         handle = self._handle
@@ -416,14 +409,14 @@ class _RunFactory:
             _storage_writer.write_run(run_obj, spans)
             for score in scores:
                 _storage_writer.write_score(score)
-        except PlumbError as plumb_err:
+        except Exception as err:
             # NFR-Rel-1: NEVER raise plumb-internal failure into caller
             logger.warning(
                 "plumb storage failure",
                 extra={
                     "plumb_internal_error": True,
                     "run_id": builder.run_id,
-                    "error_class": type(plumb_err).__name__,
+                    "error_class": type(err).__name__,
                 },
             )
         finally:

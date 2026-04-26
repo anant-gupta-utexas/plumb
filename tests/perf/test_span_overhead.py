@@ -25,28 +25,26 @@ class _NullWriter:
     def write_score(self, score: Score) -> None:
         pass
 
+    def write_example(self, example: object) -> None:
+        pass
+
 
 @pytest.mark.perf
-def test_span_overhead_p95_within_budget() -> None:
+def test_span_overhead_p95_within_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     """p95 add_span latency ≤ 1 ms (local M-series) / ≤ 2 ms (CI)."""
     N = 10_000
     CI_BUDGET_MS = 2.0
 
-    original_writer = _api._storage_writer
-    original_clock = _api._clock
-    _api._storage_writer = _NullWriter()  # type: ignore[assignment]
+    monkeypatch.setattr(_api, "_storage_writer", _NullWriter())
 
     latencies_ns: list[int] = []
 
-    try:
-        with run(task_id="perf-bench") as r:
-            for i in range(N):
-                t0 = time.perf_counter_ns()
-                r.add_span(SpanKind.LLM, f"span-{i}")
-                t1 = time.perf_counter_ns()
-                latencies_ns.append(t1 - t0)
-    finally:
-        _api._storage_writer = original_writer
+    with run(task_id="perf-bench") as r:
+        for i in range(N):
+            t0 = time.perf_counter_ns()
+            r.add_span(SpanKind.LLM, f"span-{i}")
+            t1 = time.perf_counter_ns()
+            latencies_ns.append(t1 - t0)
 
     latencies_ns.sort()
     p50_ms = latencies_ns[int(N * 0.50)] / 1_000_000

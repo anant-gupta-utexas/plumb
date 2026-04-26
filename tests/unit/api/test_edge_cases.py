@@ -26,7 +26,7 @@ class TestExceptionFlowEdgeCases:
         assert storage.last_run.error_type == "_CustomErr"
 
     def test_base_exception_propagates(self, configured_api: object) -> None:
-        """BaseException (KeyboardInterrupt) must not be suppressed."""
+        """BaseException (KeyboardInterrupt) must not be suppressed, and run is persisted."""
         from tests.conftest import FakeStorageWriter
 
         storage = configured_api  # type: ignore[assignment]
@@ -35,6 +35,10 @@ class TestExceptionFlowEdgeCases:
         with pytest.raises(KeyboardInterrupt):
             with run(task_id="t"):
                 raise KeyboardInterrupt
+
+        assert len(storage.runs) == 1
+        assert storage.last_run.status == RunStatus.FAILURE
+        assert storage.last_run.error_type == "KeyboardInterrupt"
 
     def test_multiple_exceptions_only_first_recorded(
         self, configured_api: object

@@ -63,12 +63,12 @@ class ExampleSource(StrEnum):
 
 def _require_hex32(value: str, field: str) -> None:
     if not _HEX32.match(value):
-        raise ValidationError(f"{field} must be a 32-char lowercase hex string, got: {value!r}")
+        raise ValidationError(f"{field} must be a 32-char lowercase hex string")
 
 
 def _require_hex64(value: str, field: str) -> None:
     if not _HEX64.match(value):
-        raise ValidationError(f"{field} must be a 64-char lowercase hex string, got: {value!r}")
+        raise ValidationError(f"{field} must be a 64-char lowercase hex string")
 
 
 def _require_tz(value: datetime, field: str) -> None:

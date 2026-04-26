@@ -283,6 +283,44 @@ def test_example_naive_created_at() -> None:
 
 
 # ---------------------------------------------------------------------------
+# §9.2 — no user content in ValidationError messages (log injection prevention)
+# ---------------------------------------------------------------------------
+
+
+def test_no_control_chars_in_validation_error_run_id() -> None:
+    hostile = "foo\x1bbar" + "a" * 24
+    with pytest.raises(ValidationError) as exc_info:
+        _run(run_id=hostile)
+    msg = str(exc_info.value)
+    assert "\x1b" not in msg
+    assert "\n" not in msg
+    assert "\r" not in msg
+    assert hostile not in msg
+
+
+def test_no_control_chars_in_validation_error_task_id() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        _run(task_id="")
+    msg = str(exc_info.value)
+    assert "\x1b" not in msg
+    assert "\n" not in msg
+
+
+def test_no_raw_value_in_hex32_error() -> None:
+    hostile = "secret\ninjected"
+    with pytest.raises(ValidationError) as exc_info:
+        _run(run_id=hostile)
+    assert hostile not in str(exc_info.value)
+
+
+def test_no_raw_value_in_hex64_error() -> None:
+    hostile = "secret\ninjected"
+    with pytest.raises(ValidationError) as exc_info:
+        _span(input_hash=hostile)
+    assert hostile not in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
 # JudgeResult XOR
 # ---------------------------------------------------------------------------
 
