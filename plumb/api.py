@@ -22,7 +22,7 @@ from plumb.core.entities import (
     SpanKind,
     SpanStatus,
 )
-from plumb.core.errors import PlumbError, ValidationError
+from plumb.core.errors import ValidationError
 from plumb.core.ports import Clock, IdGenerator, StorageWriter
 
 logger = logging.getLogger(__name__)
