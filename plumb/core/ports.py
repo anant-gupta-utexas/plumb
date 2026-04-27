@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
-from plumb.core.entities import Example, JudgeResult, Run, Score, Span
+from plumb.core.entities import Example, JudgeResult, Run, RunKind, RunStatus, Score, Span
 
 
 @runtime_checkable
@@ -28,7 +28,40 @@ class IdGenerator(Protocol):
 
 @runtime_checkable
 class StorageWriter(Protocol):
-    """Write-only storage port — implemented by the SQLite adapter."""
+    """Write-only storage port — implemented by the SQLite adapter.
+
+    The two-phase write protocol (open_run / finalize_run) ensures that nested
+    runs always satisfy the parent_run_id FK: the parent row is INSERT-ed at
+    __enter__ time (status='pending'), and both parent and child rows exist in
+    the DB before the child's finalize_run fires at __exit__ (FR-GRAPH-1).
+
+    write_run remains available as a single-shot convenience for direct adapter
+    use (tests, ATTACH adapter backfill).
+    """
+
+    def open_run(
+        self,
+        run_id: str,
+        task_id: str,
+        kind: RunKind,
+        parent_run_id: str | None,
+        start_ts: datetime,
+    ) -> None: ...
+
+    def finalize_run(
+        self,
+        run_id: str,
+        status: RunStatus,
+        end_ts: datetime,
+        spans: Sequence[Span],
+        *,
+        error_type: str | None = None,
+        orchestrator_model: str | None = None,
+        sub_agent_model: str | None = None,
+        prompt_version: str | None = None,
+        tool_schema_version: str | None = None,
+        git_sha: str | None = None,
+    ) -> None: ...
 
     def write_run(self, run: Run, spans: Sequence[Span]) -> None: ...
     def write_score(self, score: Score) -> None: ...

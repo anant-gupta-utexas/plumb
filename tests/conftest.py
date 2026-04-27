@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from datetime import datetime, timezone
-from typing import Iterator
+from collections.abc import Iterator, Sequence
+from datetime import UTC, datetime
 
 import pytest
 
 import plumb.api as _api
-from plumb.core.entities import Example, Run, Score, Span
-
+from plumb.core.entities import Example, Run, RunKind, RunStatus, Score, Span
 
 # ---------------------------------------------------------------------------
 # Fakes
@@ -21,7 +19,7 @@ class FakeClock:
     """Deterministic clock: increments by 1 second each call."""
 
     def __init__(self, start: datetime | None = None) -> None:
-        self._t = start or datetime(2024, 1, 1, tzinfo=timezone.utc)
+        self._t = start or datetime(2024, 1, 1, tzinfo=UTC)
         self._step = 0
 
     def now(self) -> datetime:
@@ -56,12 +54,66 @@ class FakeIdGenerator:
 
 
 class FakeStorageWriter:
-    """In-memory storage writer that records all calls for assertion."""
+    """In-memory storage writer that records all calls for assertion.
+
+    Implements the two-phase open_run / finalize_run protocol so the API layer
+    can use it transparently.  On finalize_run the run_id and accumulated spans
+    are assembled into the same (Run, [Span]) tuple the old write_run tests
+    relied on, keeping existing test assertions compatible.
+    """
 
     def __init__(self) -> None:
         self.runs: list[tuple[Run, list[Span]]] = []
         self.scores: list[Score] = []
         self.examples: list[Example] = []
+        # Staging area: run_id → (task_id, kind, parent_run_id, start_ts)
+        self._pending: dict[str, tuple[str, RunKind, str | None, datetime]] = {}
+
+    def open_run(
+        self,
+        run_id: str,
+        task_id: str,
+        kind: RunKind,
+        parent_run_id: str | None,
+        start_ts: datetime,
+    ) -> None:
+        self._pending[run_id] = (task_id, kind, parent_run_id, start_ts)
+
+    def finalize_run(
+        self,
+        run_id: str,
+        status: RunStatus,
+        end_ts: datetime,
+        spans: Sequence[Span],
+        *,
+        error_type: str | None = None,
+        orchestrator_model: str | None = None,
+        sub_agent_model: str | None = None,
+        prompt_version: str | None = None,
+        tool_schema_version: str | None = None,
+        git_sha: str | None = None,
+    ) -> None:
+        pending = self._pending.pop(run_id, None)
+        if pending is None:
+            task_id, kind, parent_run_id, start_ts = "unknown", RunKind.ONLINE, None, end_ts
+        else:
+            task_id, kind, parent_run_id, start_ts = pending
+        run = Run(
+            run_id=run_id,
+            task_id=task_id,
+            kind=kind,
+            status=status,
+            start_ts=start_ts,
+            end_ts=end_ts,
+            parent_run_id=parent_run_id,
+            error_type=error_type,
+            orchestrator_model=orchestrator_model,
+            sub_agent_model=sub_agent_model,
+            prompt_version=prompt_version,
+            tool_schema_version=tool_schema_version,
+            git_sha=git_sha,
+        )
+        self.runs.append((run, list(spans)))
 
     def write_run(self, run: Run, spans: Sequence[Span]) -> None:
         self.runs.append((run, list(spans)))
@@ -117,4 +169,5 @@ def configured_api(
     monkeypatch.setattr(_api, "_clock", fake_clock)
     monkeypatch.setattr(_api, "_id_gen", fake_id_gen)
     monkeypatch.setattr(_api, "_storage_writer", fake_storage)
+    monkeypatch.setattr(_api, "_storage", fake_storage)
     yield fake_storage

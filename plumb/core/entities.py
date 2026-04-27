@@ -22,6 +22,7 @@ class RunKind(StrEnum):
 
 
 class RunStatus(StrEnum):
+    PENDING = "pending"
     SUCCESS = "success"
     FAILURE = "failure"
     ABORTED = "aborted"

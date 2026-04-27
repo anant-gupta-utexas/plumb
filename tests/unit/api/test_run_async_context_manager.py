@@ -130,9 +130,8 @@ class TestAsyncNesting:
         assert _api._active_run.get() is None
 
     async def test_nested_async_run_has_own_run_id(self, configured_api: object) -> None:
-        async with run(task_id="outer") as outer:
-            async with run(task_id="inner") as inner:
-                assert outer.run_id != inner.run_id
+        async with run(task_id="outer") as outer, run(task_id="inner") as inner:
+            assert outer.run_id != inner.run_id
 
 
 class TestAsyncNFRRel1:
@@ -148,7 +147,7 @@ class TestAsyncNFRRel1:
         def _raise(*args: object, **kwargs: object) -> None:
             raise StorageError("disk full")
 
-        storage.write_run = _raise  # type: ignore[method-assign]
+        storage.finalize_run = _raise  # type: ignore[method-assign]
 
         result = None
         with caplog.at_level(logging.WARNING, logger="plumb.api"):
@@ -170,7 +169,7 @@ class TestAsyncNFRRel1:
         def _raise(*args: object, **kwargs: object) -> None:
             raise StorageError("disk full")
 
-        storage.write_run = _raise  # type: ignore[method-assign]
+        storage.finalize_run = _raise  # type: ignore[method-assign]
 
         class _UserErr(Exception):
             pass

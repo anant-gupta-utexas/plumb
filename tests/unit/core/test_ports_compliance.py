@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from plumb.core.entities import Example, JudgeResult, Run, Score, Span
+from plumb.core.entities import Example, JudgeResult, Run, RunKind, RunStatus, Score, Span
 from plumb.core.ports import (
     BlobStore,
     Clock,
@@ -15,7 +15,6 @@ from plumb.core.ports import (
     StorageWriter,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fakes
 # ---------------------------------------------------------------------------
@@ -23,7 +22,7 @@ from plumb.core.ports import (
 
 class FakeClock:
     def now(self) -> datetime:
-        return datetime(2024, 1, 1, tzinfo=timezone.utc)
+        return datetime(2024, 1, 1, tzinfo=UTC)
 
 
 class FakeIdGenerator:
@@ -51,6 +50,32 @@ class FakeStorageWriter:
         self.runs: list[tuple[Run, list[Span]]] = []
         self.scores: list[Score] = []
         self.examples: list[Example] = []
+
+    def open_run(
+        self,
+        run_id: str,
+        task_id: str,
+        kind: RunKind,
+        parent_run_id: str | None,
+        start_ts: datetime,
+    ) -> None:
+        pass
+
+    def finalize_run(
+        self,
+        run_id: str,
+        status: RunStatus,
+        end_ts: datetime,
+        spans: Sequence[Span],
+        *,
+        error_type: str | None = None,
+        orchestrator_model: str | None = None,
+        sub_agent_model: str | None = None,
+        prompt_version: str | None = None,
+        tool_schema_version: str | None = None,
+        git_sha: str | None = None,
+    ) -> None:
+        pass
 
     def write_run(self, run: Run, spans: Sequence[Span]) -> None:
         self.runs.append((run, list(spans)))

@@ -207,6 +207,27 @@ INSERT INTO runs (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """.strip()
 
+# Minimal pending-row INSERT: only the FK-relevant and NOT NULL columns.
+# All optional metadata columns stay NULL; finalize_run fills them in.
+_INSERT_PENDING_RUN = """
+INSERT INTO runs (run_id, kind, task_id, parent_run_id, start_ts, status)
+VALUES (?, ?, ?, ?, ?, 'pending')
+""".strip()
+
+_FINALIZE_RUN = """
+UPDATE runs
+SET
+    status              = ?,
+    end_ts              = ?,
+    error_type          = ?,
+    orchestrator_model  = ?,
+    sub_agent_model     = ?,
+    prompt_version      = ?,
+    tool_schema_version = ?,
+    git_sha             = ?
+WHERE run_id = ?
+""".strip()
+
 _INSERT_SPAN = """
 INSERT INTO spans (
     span_id, run_id, parent_span_id, kind, name,
@@ -279,6 +300,8 @@ class SQLiteStorageAdapter:
     def _sweep_stalled_runs(self) -> None:
         threshold = self._clock.now() - timedelta(seconds=self._stalled_threshold_seconds)
         threshold_iso = threshold.isoformat()
+        # 'pending' rows are mid-flight runs (INSERT-on-enter); they are the
+        # primary target of the sweep.  The broader NOT IN guard is defense-in-depth.
         cur = self._conn.execute(
             """
             UPDATE runs
@@ -298,8 +321,74 @@ class SQLiteStorageAdapter:
             )
 
     # -------------------------------------------------------------------------
-    # StorageWriter
+    # StorageWriter — two-phase protocol (open_run / finalize_run)
     # -------------------------------------------------------------------------
+
+    def open_run(
+        self,
+        run_id: str,
+        task_id: str,
+        kind: RunKind,
+        parent_run_id: str | None,
+        start_ts: datetime,
+    ) -> None:
+        """INSERT a pending run row immediately at run-enter time (FR-GRAPH-1).
+
+        The row exists in the DB before any child run's open_run fires, so the
+        parent_run_id FK is always satisfied when the child row is inserted.
+        """
+        try:
+            with self._conn:
+                self._conn.execute(
+                    _INSERT_PENDING_RUN,
+                    (run_id, kind.value, task_id, parent_run_id, _dt_to_iso(start_ts)),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise StorageError(str(exc)) from exc
+        except sqlite3.Error as exc:
+            raise StorageError(str(exc)) from exc
+
+    def finalize_run(
+        self,
+        run_id: str,
+        status: RunStatus,
+        end_ts: datetime,
+        spans: Sequence[Span],
+        *,
+        error_type: str | None = None,
+        orchestrator_model: str | None = None,
+        sub_agent_model: str | None = None,
+        prompt_version: str | None = None,
+        tool_schema_version: str | None = None,
+        git_sha: str | None = None,
+    ) -> None:
+        """UPDATE the pending row to its final status and batch-INSERT spans.
+
+        Single transaction, single fsync (NFR-Perf-4).
+        """
+        span_rows = [_span_to_row(s) for s in spans]
+        try:
+            with self._conn:
+                self._conn.execute(
+                    _FINALIZE_RUN,
+                    (
+                        status.value,
+                        _dt_to_iso(end_ts),
+                        error_type,
+                        orchestrator_model,
+                        sub_agent_model,
+                        prompt_version,
+                        tool_schema_version,
+                        git_sha,
+                        run_id,
+                    ),
+                )
+                if span_rows:
+                    self._conn.executemany(_INSERT_SPAN, span_rows)
+        except sqlite3.IntegrityError as exc:
+            raise StorageError(str(exc)) from exc
+        except sqlite3.Error as exc:
+            raise StorageError(str(exc)) from exc
 
     def write_run(self, run: Run, spans: Sequence[Span]) -> None:
         run_row = _run_to_row(run)

@@ -365,13 +365,13 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 6.1 — Extend `plumb.config` with `data_dir` + `ensure_data_dir` [S]
 
-- [ ] `Settings.data_dir: Path` field added with default `~/.plumb`
-- [ ] `PLUMB_DATA_DIR=/tmp/x` env var override resolves to `Path("/tmp/x")`
-- [ ] `ensure_data_dir(settings)` creates dir with mode `0o700`
-- [ ] `ensure_data_dir` idempotent on existing dir (does NOT change mode bits if user widened them)
-- [ ] `ensure_data_dir` returns absolute, resolved Path
-- [ ] Tilde expansion (`~/.plumb`) handled correctly
-- [ ] `tests/unit/test_config.py` extended (or created) to cover all of above
+- [x] `Settings.data_dir: Path` field added with default `~/.plumb`
+- [x] `PLUMB_DATA_DIR=/tmp/x` env var override resolves to `Path("/tmp/x")`
+- [x] `ensure_data_dir(settings)` creates dir with mode `0o700`
+- [x] `ensure_data_dir` idempotent on existing dir (does NOT change mode bits if user widened them)
+- [x] `ensure_data_dir` returns absolute, resolved Path
+- [x] Tilde expansion (`~/.plumb`) handled correctly
+- [x] `tests/unit/test_config.py` extended (or created) to cover all of above
 
 **Files to Create/Modify**
 - `plumb/config.py`
@@ -385,14 +385,14 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 6.2 — Lazy adapter init in `plumb.api` [M]
 
-- [ ] `plumb.api._storage` and `plumb.api._blobstore` module-level singletons declared (initially `None`)
-- [ ] `_init_storage_singletons()` lazy bootstrap function added
-- [ ] Cold `import plumb` does NOT instantiate `SQLiteStorageAdapter` (verified via `ImportTime` snapshot or test that asserts `_storage is None` post-import)
-- [ ] First `with run(...)` triggers `_init_storage_singletons` exactly once (instrumented via spy)
-- [ ] Second `with run(...)` reuses the same singleton (spy not called again)
-- [ ] All existing core-slice `configured_api` fixture tests still pass (monkeypatch path unchanged)
-- [ ] Cold-import time still ≤ 200 ms
-- [ ] `tests/unit/api/test_lazy_init.py` covers all of above
+- [x] `plumb.api._storage` and `plumb.api._blobstore` module-level singletons declared (initially `None`)
+- [x] `_init_storage_singletons()` lazy bootstrap function added
+- [x] Cold `import plumb` does NOT instantiate `SQLiteStorageAdapter` (verified via `ImportTime` snapshot or test that asserts `_storage is None` post-import)
+- [x] First `with run(...)` triggers `_init_storage_singletons` exactly once (instrumented via spy)
+- [x] Second `with run(...)` reuses the same singleton (spy not called again)
+- [x] All existing core-slice `configured_api` fixture tests still pass (monkeypatch path unchanged)
+- [x] Cold-import time still ≤ 200 ms
+- [x] `tests/unit/api/test_lazy_init.py` covers all of above
 
 **Files to Create/Modify**
 - `plumb/api.py`
@@ -406,15 +406,25 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 6.3 — Integration test: full `@run` → real DB [M]
 
-- [ ] `@run(task_id=...)` on sync function writes 1 `runs` row + spans + (if applicable) blobs to a `tmp_path` DB
-- [ ] Async variant works (`@run` on `async def`)
-- [ ] Nested decorator: 2 rows; child row has correct `parent_run_id` matching parent's `run_id`
-- [ ] `r.add_score(...)` writes a `scores` row
-- [ ] `r.abort("reason")` flushes partial buffer with `status='aborted'` and `error_type='reason'`
-- [ ] All v1 Core+API ACs (AC-API-1, AC-API-2 sync + async) re-run green with real adapter
-- [ ] `r.add_span(kind=SpanKind.HANDOFF, name=..., input_hash=h1, output_hash=h2)` round-trips both blob hashes through `FilesystemBlobStore`
-- [ ] Storage-failure path: simulate `StorageError` via monkeypatched adapter; wrapped function's return value reaches caller unchanged (AC-REL-1 partial)
-- [ ] `tests/integration/test_api_with_sqlite.py` and `tests/integration/test_api_with_blobstore.py` cover all of above
+- [x] `@run(task_id=...)` on sync function writes 1 `runs` row + spans + (if applicable) blobs to a `tmp_path` DB
+- [x] Async variant works (`@run` on `async def`)
+- [x] Nested decorator: 2 rows; child row has correct `parent_run_id` matching parent's `run_id`
+- [x] `r.add_score(...)` writes a `scores` row
+- [x] `r.abort("reason")` flushes partial buffer with `status='aborted'` and `error_type='reason'`
+- [x] All v1 Core+API ACs (AC-API-1, AC-API-2 sync + async) re-run green with real adapter
+- [x] `r.add_span(kind=SpanKind.HANDOFF, name=..., input_hash=h1, output_hash=h2)` round-trips both blob hashes through `FilesystemBlobStore`
+- [x] Storage-failure path: simulate `StorageError` via monkeypatched adapter; wrapped function's return value reaches caller unchanged (AC-REL-1 partial)
+- [x] `tests/integration/test_api_with_sqlite.py` and `tests/integration/test_api_with_blobstore.py` cover all of above
+
+**FR-GRAPH-1 fix included (folded into Phase 6):**
+- [x] `runs.status` CHECK constraint extended with `'pending'` (DDL + TRD §7.1 updated)
+- [x] `StorageWriter` protocol extended with `open_run` / `finalize_run` two-phase write API
+- [x] `SQLiteStorageAdapter.open_run` INSERTs a pending row at `__enter__` time
+- [x] `SQLiteStorageAdapter.finalize_run` UPDATEs the row and batch-INSERTs spans at `__exit__` time
+- [x] `plumb.api.__enter__` calls `open_run` (pending row in DB before child `open_run` fires → FK satisfied)
+- [x] `plumb.api.__exit__` calls `finalize_run` instead of `write_run`
+- [x] Stalled-run sweep now targets real `pending` rows (FR-EDGE-2 fully operational)
+- [x] `test_nested_run_both_rows_committed` and `test_nested_run_three_levels` pass (FR-GRAPH-1 acceptance test)
 
 **Files to Create/Modify**
 - `tests/integration/test_api_with_sqlite.py`
@@ -427,9 +437,10 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 ---
 
 **Phase 6 Deliverables:**
-- [ ] Real adapters wired into `plumb.api`
-- [ ] All prior-slice ACs still green
-- [ ] First end-to-end integration test passing
+- [x] Real adapters wired into `plumb.api`
+- [x] All prior-slice ACs still green
+- [x] First end-to-end integration test passing
+- [x] FR-GRAPH-1 (nested run parent_run_id FK) fixed via two-phase write (INSERT-on-enter, UPDATE-on-exit)
 
 ---
 

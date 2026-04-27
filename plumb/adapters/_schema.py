@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS runs (
     tokens_in           INTEGER,
     tokens_out          INTEGER,
     dollar_cost         REAL,
-    status              TEXT    NOT NULL CHECK (status IN ('success', 'failure', 'aborted', 'stalled')),
+    status              TEXT    NOT NULL CHECK (status IN ('pending', 'success', 'failure', 'aborted', 'stalled')),
     error_type          TEXT
 ) STRICT""",
     "CREATE INDEX IF NOT EXISTS idx_runs_task_start     ON runs(task_id, start_ts)",

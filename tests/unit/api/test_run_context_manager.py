@@ -9,7 +9,7 @@ import pytest
 import plumb.api as _api
 from plumb.api import RunHandle, run
 from plumb.core.entities import RunStatus, SpanKind
-from plumb.core.errors import PlumbError, StorageError, ValidationError
+from plumb.core.errors import StorageError
 
 
 class TestBasicContextManager:
@@ -56,9 +56,8 @@ class TestEdgeCases:
         class _UserErr(Exception):
             pass
 
-        with pytest.raises(_UserErr):
-            with run(task_id="t"):
-                raise _UserErr("boom")
+        with pytest.raises(_UserErr), run(task_id="t"):
+            raise _UserErr("boom")
 
         assert len(storage.runs) == 1
         assert storage.last_run.status == RunStatus.FAILURE
@@ -136,9 +135,8 @@ class TestNesting:
 
         storage = configured_api  # type: ignore[assignment]
         assert isinstance(storage, FakeStorageWriter)
-        with run(task_id="outer") as outer:
-            with run(task_id="inner") as inner:
-                assert outer.run_id != inner.run_id
+        with run(task_id="outer") as outer, run(task_id="inner") as inner:
+            assert outer.run_id != inner.run_id
 
     def test_contextvar_restored_after_exit(self, configured_api: object) -> None:
         with run(task_id="outer"):
@@ -158,17 +156,14 @@ class TestNFRRel1:
         storage = configured_api  # type: ignore[assignment]
         assert isinstance(storage, FakeStorageWriter)
 
-        original_write = storage.write_run
-
         def _raise(*args: object, **kwargs: object) -> None:
             raise StorageError("disk full")
 
-        storage.write_run = _raise  # type: ignore[method-assign]
+        storage.finalize_run = _raise  # type: ignore[method-assign]
 
         result = None
-        with caplog.at_level(logging.WARNING, logger="plumb.api"):
-            with run(task_id="t") as r:
-                result = 42
+        with caplog.at_level(logging.WARNING, logger="plumb.api"), run(task_id="t") as r:
+            result = 42
 
         assert result == 42  # user return value unaffected
 
@@ -192,9 +187,8 @@ class TestNFRRel1:
         class _UserErr(Exception):
             pass
 
-        with pytest.raises(_UserErr):
-            with run(task_id="t"):
-                raise _UserErr("user problem")
+        with pytest.raises(_UserErr), run(task_id="t"):
+            raise _UserErr("user problem")
 
 
 class TestSpansAndScoresWritten:

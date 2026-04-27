@@ -9,7 +9,7 @@ import uuid
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar, Token
 from datetime import datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from plumb.core.entities import (
     Example,
@@ -24,6 +24,10 @@ from plumb.core.entities import (
 )
 from plumb.core.errors import ValidationError
 from plumb.core.ports import Clock, IdGenerator, StorageWriter
+
+if TYPE_CHECKING:
+    from plumb.adapters.blobstore_fs import FilesystemBlobStore
+    from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +60,32 @@ class _DefaultIdGenerator:
 class _NoopStorageWriter:
     """Used before a real writer is configured (e.g. during test isolation)."""
 
+    def open_run(
+        self,
+        run_id: str,
+        task_id: str,
+        kind: RunKind,
+        parent_run_id: str | None,
+        start_ts: datetime,
+    ) -> None:
+        pass
+
+    def finalize_run(
+        self,
+        run_id: str,
+        status: RunStatus,
+        end_ts: datetime,
+        spans: Sequence[Span],
+        *,
+        error_type: str | None = None,
+        orchestrator_model: str | None = None,
+        sub_agent_model: str | None = None,
+        prompt_version: str | None = None,
+        tool_schema_version: str | None = None,
+        git_sha: str | None = None,
+    ) -> None:
+        pass
+
     def write_run(self, run: Run, spans: Sequence[Span]) -> None:
         pass
 
@@ -69,6 +99,30 @@ class _NoopStorageWriter:
 _clock: Clock = _DefaultClock()
 _id_gen: IdGenerator = _DefaultIdGenerator()
 _storage_writer: StorageWriter = _NoopStorageWriter()
+
+# Real adapter singletons — None until first run(), allowing tests to monkeypatch first.
+_storage: SQLiteStorageAdapter | None = None
+_blobstore: FilesystemBlobStore | None = None
+
+
+def _init_storage_singletons() -> None:
+    """Lazily bootstrap real adapters on first run() call.
+
+    No-op if _storage is already set (either by previous call or test monkeypatch).
+    Imports adapters inside the function to preserve the cold-import budget (NFR-Perf-6).
+    """
+    global _storage, _blobstore, _storage_writer
+    if _storage is not None:
+        return
+
+    from plumb.adapters.blobstore_fs import FilesystemBlobStore
+    from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
+    from plumb.config import ensure_data_dir, get_settings
+
+    data_dir = ensure_data_dir(get_settings())
+    _storage = SQLiteStorageAdapter(data_dir / "plumb.db", clock=_clock)
+    _blobstore = FilesystemBlobStore(data_dir / "blobs")
+    _storage_writer = _storage
 
 # ---------------------------------------------------------------------------
 # Contextvar — tracks the active RunHandle in the current task/thread
@@ -339,6 +393,7 @@ class _RunFactory:
     # -- context manager (sync) -----------------------------------------------
 
     def __enter__(self) -> RunHandle:
+        _init_storage_singletons()
         self._deduped = False
         parent_handle = _active_run.get()
 
@@ -357,12 +412,14 @@ class _RunFactory:
             self._handle = parent_handle
             return parent_handle
 
+        start_ts = _clock.now()
+        run_id = _id_gen.new_run_id()
         builder = _RunBuilder(
-            run_id=_id_gen.new_run_id(),
+            run_id=run_id,
             kind=self.kind,
             task_id=self.task_id,
             parent_run_id=parent_run_id,
-            start_ts=_clock.now(),
+            start_ts=start_ts,
             orchestrator_model=self.orchestrator_model,
             sub_agent_model=self.sub_agent_model,
             prompt_version=self.prompt_version,
@@ -374,6 +431,21 @@ class _RunFactory:
             handle._open_frame_id = self._frame_id
         self._token = _active_run.set(handle)
         self._handle = handle
+
+        # INSERT the pending row immediately so parent_run_id FK is satisfied
+        # before any child run's open_run fires (FR-GRAPH-1).
+        try:
+            _storage_writer.open_run(run_id, self.task_id, self.kind, parent_run_id, start_ts)
+        except Exception as err:
+            logger.warning(
+                "plumb storage failure (open_run)",
+                extra={
+                    "plumb_internal_error": True,
+                    "run_id": run_id,
+                    "error_class": type(err).__name__,
+                },
+            )
+
         return handle
 
     def __exit__(
@@ -403,10 +475,20 @@ class _RunFactory:
         builder.end_ts = _clock.now()
 
         try:
-            run_obj = builder.freeze()
             spans = list(builder.spans)
             scores = list(builder.scores)
-            _storage_writer.write_run(run_obj, spans)
+            _storage_writer.finalize_run(
+                builder.run_id,
+                builder.status,
+                builder.end_ts,
+                spans,
+                error_type=builder.error_type,
+                orchestrator_model=builder.orchestrator_model,
+                sub_agent_model=builder.sub_agent_model,
+                prompt_version=builder.prompt_version,
+                tool_schema_version=builder.tool_schema_version,
+                git_sha=builder.git_sha,
+            )
             for score in scores:
                 _storage_writer.write_score(score)
         except Exception as err:

@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
-from plumb.adapters._schema import DDL_STATEMENTS
 from plumb.adapters._pragmas import apply_pragmas
+from plumb.adapters._schema import DDL_STATEMENTS
+from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
 from plumb.core.errors import StorageError
 
 
@@ -91,29 +91,31 @@ def test_context_manager_enter_exit(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _setup_db_with_open_run(db_path: Path, start_ts_iso: str) -> None:
-    """Create schema + insert a row with end_ts=NULL bypassing entity validation.
-
-    SQLite STRICT + CHECK only allows ('success','failure','aborted','stalled') for status.
-    We use 'stalled' as initial status, then UPDATE back to simulate a pre-sweep state.
-    The sweep targets: end_ts IS NULL AND status NOT IN ('stalled','aborted','failure','success').
-    Since all valid enum values are terminal, an "in-flight" run at the DB level must be
-    represented differently. We directly write status='success' with end_ts=NULL to test
-    that the sweep's status-NOT-IN guard correctly leaves terminal-status rows untouched,
-    and that the sweep itself executes without error.
-    """
+def _setup_db_with_pending_run(db_path: Path, start_ts_iso: str) -> None:
+    """Create schema + insert a pending (mid-flight) run with end_ts=NULL."""
     conn = sqlite3.connect(str(db_path))
     apply_pragmas(conn)
     for stmt in DDL_STATEMENTS:
         conn.execute(stmt)
     conn.execute("PRAGMA user_version = 1")
     conn.execute(
-        """INSERT INTO runs (
-            run_id, kind, task_id, parent_run_id,
-            orchestrator_model, sub_agent_model, prompt_version, tool_schema_version, git_sha,
-            start_ts, end_ts, tokens_in, tokens_out, dollar_cost, status, error_type
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, NULL)""",
-        ("a" * 32, "online", "task1", None, None, None, None, None, None, start_ts_iso, "success"),
+        "INSERT INTO runs (run_id, kind, task_id, start_ts, status) VALUES (?, ?, ?, ?, ?)",
+        ("a" * 32, "online", "task1", start_ts_iso, "pending"),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _setup_db_with_terminal_run(db_path: Path, start_ts_iso: str) -> None:
+    """Create schema + insert a finished run with end_ts=NULL (terminal but no end_ts)."""
+    conn = sqlite3.connect(str(db_path))
+    apply_pragmas(conn)
+    for stmt in DDL_STATEMENTS:
+        conn.execute(stmt)
+    conn.execute("PRAGMA user_version = 1")
+    conn.execute(
+        "INSERT INTO runs (run_id, kind, task_id, start_ts, status) VALUES (?, ?, ?, ?, ?)",
+        ("a" * 32, "online", "task1", start_ts_iso, "success"),
     )
     conn.commit()
     conn.close()
@@ -125,15 +127,28 @@ def test_stalled_sweep_runs_without_error_on_empty_db(tmp_path: Path) -> None:
         pass
 
 
+def test_stalled_sweep_marks_old_pending_run(tmp_path: Path) -> None:
+    """Core FR-EDGE-2 path: a pending run older than the threshold becomes 'stalled'."""
+    now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+    two_hours_ago = (now - timedelta(hours=2)).isoformat()
+    db = tmp_path / "test.db"
+    _setup_db_with_pending_run(db, two_hours_ago)
+
+    with SQLiteStorageAdapter(db, clock=_FixedClock(now), stalled_threshold_seconds=3600) as adapter:  # noqa: E501
+        row = adapter._conn.execute(
+            "SELECT status FROM runs WHERE run_id = ?", ("a" * 32,)
+        ).fetchone()
+        assert row["status"] == "stalled"
+
+
 def test_stalled_sweep_does_not_mark_terminal_status_rows(tmp_path: Path) -> None:
     """Rows with terminal status + NULL end_ts are left unchanged (status-guard)."""
     now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
     two_hours_ago = (now - timedelta(hours=2)).isoformat()
     db = tmp_path / "test.db"
-    _setup_db_with_open_run(db, two_hours_ago)
+    _setup_db_with_terminal_run(db, two_hours_ago)
 
-    # Open adapter — sweep runs during init
-    with SQLiteStorageAdapter(db, clock=_FixedClock(now), stalled_threshold_seconds=3600) as adapter:
+    with SQLiteStorageAdapter(db, clock=_FixedClock(now), stalled_threshold_seconds=3600) as adapter:  # noqa: E501
         row = adapter._conn.execute(
             "SELECT status FROM runs WHERE run_id = ?", ("a" * 32,)
         ).fetchone()
@@ -141,17 +156,18 @@ def test_stalled_sweep_does_not_mark_terminal_status_rows(tmp_path: Path) -> Non
         assert row["status"] == "success"
 
 
-def test_stalled_sweep_leaves_recent_runs_unchanged(tmp_path: Path) -> None:
+def test_stalled_sweep_leaves_recent_pending_run_unchanged(tmp_path: Path) -> None:
+    """A pending run that is newer than the threshold is left alone."""
     now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
     thirty_min_ago = (now - timedelta(minutes=30)).isoformat()
     db = tmp_path / "test.db"
-    _setup_db_with_open_run(db, thirty_min_ago)
+    _setup_db_with_pending_run(db, thirty_min_ago)
 
-    with SQLiteStorageAdapter(db, clock=_FixedClock(now), stalled_threshold_seconds=3600) as adapter:
+    with SQLiteStorageAdapter(db, clock=_FixedClock(now), stalled_threshold_seconds=3600) as adapter:  # noqa: E501
         row = adapter._conn.execute(
             "SELECT status FROM runs WHERE run_id = ?", ("a" * 32,)
         ).fetchone()
-        assert row["status"] == "success"
+        assert row["status"] == "pending"
 
 
 def test_stalled_threshold_seconds_honored(tmp_path: Path) -> None:
