@@ -15,15 +15,15 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 1.1 — Create adapter package skeleton [S]
 
-- [ ] `plumb/adapters/__init__.py` exists and is empty (no eager imports)
-- [ ] `plumb/adapters/_schema.py` placeholder file exists
-- [ ] `plumb/adapters/_pragmas.py` placeholder file exists
-- [ ] `plumb/adapters/storage_sqlite.py` placeholder file exists
-- [ ] `plumb/adapters/blobstore_fs.py` placeholder file exists
-- [ ] `python -X importtime -c 'import plumb' 2>&1 | tail -5` shows no `plumb.adapters` line
-- [ ] Cold-import time still ≤ 200 ms (existing `tests/perf/test_cold_import.py` passes)
-- [ ] `from plumb.adapters import _schema, _pragmas` works on explicit import
-- [ ] `ruff check plumb/adapters/` exits 0
+- [x] `plumb/adapters/__init__.py` exists and is empty (no eager imports)
+- [x] `plumb/adapters/_schema.py` placeholder file exists
+- [x] `plumb/adapters/_pragmas.py` placeholder file exists
+- [x] `plumb/adapters/storage_sqlite.py` placeholder file exists
+- [x] `plumb/adapters/blobstore_fs.py` placeholder file exists
+- [x] `python -X importtime -c 'import plumb' 2>&1 | tail -5` shows no `plumb.adapters` line
+- [x] Cold-import time still ≤ 200 ms (existing `tests/perf/test_cold_import.py` passes)
+- [x] `from plumb.adapters import _schema, _pragmas` works on explicit import
+- [x] `ruff check plumb/adapters/` exits 0
 
 **Files to Create/Modify**
 - `plumb/adapters/__init__.py`
@@ -40,15 +40,15 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 1.2 — Author canonical DDL in `_schema.py` [M]
 
-- [ ] `SCHEMA_VERSION: int = 1` defined
-- [ ] `DDL_STATEMENTS: tuple[str, ...]` defined with all 4 `CREATE TABLE` + 13 `CREATE INDEX` statements from TRD §7.1
-- [ ] All `CREATE TABLE` use `IF NOT EXISTS`
-- [ ] All `CREATE TABLE` use the `STRICT` keyword
-- [ ] All `CHECK` constraints from TRD §7.1 reproduced verbatim
-- [ ] Foreign-key clauses (`REFERENCES runs(run_id) ON DELETE CASCADE`, etc.) reproduced verbatim
-- [ ] `tests/unit/adapters/test_schema_ddl.py::test_ddl_matches_trd` compares `DDL_STATEMENTS` against a pinned copy of the TRD §7.1 SQL block; passes
-- [ ] `tests/unit/adapters/test_schema_ddl.py::test_each_statement_parses` runs every statement in an isolated `sqlite3.connect(':memory:')`; all pass
-- [ ] Coverage ≥ 90% on `_schema.py`
+- [x] `SCHEMA_VERSION: int = 1` defined
+- [x] `DDL_STATEMENTS: tuple[str, ...]` defined with all 4 `CREATE TABLE` + 13 `CREATE INDEX` statements from TRD §7.1
+- [x] All `CREATE TABLE` use `IF NOT EXISTS`
+- [x] All `CREATE TABLE` use the `STRICT` keyword
+- [x] All `CHECK` constraints from TRD §7.1 reproduced verbatim
+- [x] Foreign-key clauses (`REFERENCES runs(run_id) ON DELETE CASCADE`, etc.) reproduced verbatim
+- [x] `tests/unit/adapters/test_schema_ddl.py::test_ddl_matches_trd` compares `DDL_STATEMENTS` against a pinned copy of the TRD §7.1 SQL block; passes
+- [x] `tests/unit/adapters/test_schema_ddl.py::test_each_statement_parses` runs every statement in an isolated `sqlite3.connect(':memory:')`; all pass
+- [x] Coverage ≥ 90% on `_schema.py`
 
 **Files to Create/Modify**
 - `plumb/adapters/_schema.py`
@@ -63,15 +63,15 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 1.3 — Implement `_pragmas.apply_pragmas` + `verify_pragmas` [S]
 
-- [ ] `apply_pragmas(conn)` sets `journal_mode=WAL`
-- [ ] `apply_pragmas(conn)` sets `synchronous=NORMAL`
-- [ ] `apply_pragmas(conn)` sets `busy_timeout=5000`
-- [ ] `apply_pragmas(conn)` sets `foreign_keys=ON`
-- [ ] `verify_pragmas(conn)` returns `None` when all four pragmas are correctly set
-- [ ] `verify_pragmas(conn)` raises `StorageError` if any pragma is wrong
-- [ ] Idempotent — calling `apply_pragmas` twice does not error and end state is identical
-- [ ] `tests/unit/adapters/test_pragmas.py` covers all four pragmas + idempotency + verify-fail path
-- [ ] Coverage ≥ 95% on `_pragmas.py`
+- [x] `apply_pragmas(conn)` sets `journal_mode=WAL`
+- [x] `apply_pragmas(conn)` sets `synchronous=NORMAL`
+- [x] `apply_pragmas(conn)` sets `busy_timeout=5000`
+- [x] `apply_pragmas(conn)` sets `foreign_keys=ON`
+- [x] `verify_pragmas(conn)` returns `None` when all four pragmas are correctly set
+- [x] `verify_pragmas(conn)` raises `StorageError` if any pragma is wrong
+- [x] Idempotent — calling `apply_pragmas` twice does not error and end state is identical
+- [x] `tests/unit/adapters/test_pragmas.py` covers all four pragmas + idempotency + verify-fail path
+- [x] Coverage ≥ 95% on `_pragmas.py`
 
 **Files to Create/Modify**
 - `plumb/adapters/_pragmas.py`
@@ -84,9 +84,9 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 ---
 
 **Phase 1 Deliverables:**
-- [ ] Adapter package importable but lazily loaded
-- [ ] Canonical DDL + pragma helpers in code with tests
-- [ ] Cold-import budget intact
+- [x] Adapter package importable but lazily loaded
+- [x] Canonical DDL + pragma helpers in code with tests
+- [x] Cold-import budget intact
 
 ---
 
@@ -96,17 +96,17 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 2.1 — Implement `FilesystemBlobStore.put` / `.get` / `.exists` [M]
 
-- [ ] `FilesystemBlobStore(root)` constructor stores `root` as `Path`; does NOT create dir eagerly (created on first `put`)
-- [ ] `put(content)` returns 64-char lowercase hex sha256 of `content`
-- [ ] `put` uses `os.open(target, O_CREAT|O_EXCL|O_WRONLY, 0o600)`, `os.write`, `os.fsync`, `os.close`
-- [ ] `put` of identical content twice returns same digest, no error, single file on disk
-- [ ] `put(b"")` works correctly (sha256 of empty bytes)
-- [ ] `get(hex)` returns the exact bytes that were `put`
-- [ ] `get(missing_hex)` raises `BlobNotFoundError` with the hex in the message
-- [ ] `get(malformed_hex)` (not 64 lowercase hex chars) raises `ValidationError`
-- [ ] `exists(hex)` returns `bool` correctly
-- [ ] Hypothesis property test: `get(put(b)) == b` for arbitrary `bytes` (length 0..1024)
-- [ ] Coverage ≥ 95% on `blobstore_fs.py`
+- [x] `FilesystemBlobStore(root)` constructor stores `root` as `Path`; does NOT create dir eagerly (created on first `put`)
+- [x] `put(content)` returns 64-char lowercase hex sha256 of `content`
+- [x] `put` uses `os.open(target, O_CREAT|O_EXCL|O_WRONLY, 0o600)`, `os.write`, `os.fsync`, `os.close`
+- [x] `put` of identical content twice returns same digest, no error, single file on disk
+- [x] `put(b"")` works correctly (sha256 of empty bytes)
+- [x] `get(hex)` returns the exact bytes that were `put`
+- [x] `get(missing_hex)` raises `BlobNotFoundError` with the hex in the message
+- [x] `get(malformed_hex)` (not 64 lowercase hex chars) raises `ValidationError`
+- [x] `exists(hex)` returns `bool` correctly
+- [x] Hypothesis property test: `get(put(b)) == b` for arbitrary `bytes` (length 0..1024)
+- [x] Coverage ≥ 95% on `blobstore_fs.py`
 
 **Files to Create/Modify**
 - `plumb/adapters/blobstore_fs.py`
@@ -120,11 +120,11 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 2.2 — Mode-bit invariants [S]
 
-- [ ] After first `put`, `stat(root).st_mode & 0o777 == 0o700`
-- [ ] After first `put`, `stat(root / digest[:2]).st_mode & 0o777 == 0o700`
-- [ ] After first `put`, `stat(root / digest[:2] / digest[2:]).st_mode & 0o777 == 0o600`
-- [ ] Test marked `@pytest.mark.skipif(os.name == 'nt', reason='POSIX modes only')` — Windows skip
-- [ ] Mode bits hold even when run with permissive umask (e.g., `umask(0)` in fixture)
+- [x] After first `put`, `stat(root).st_mode & 0o777 == 0o700`
+- [x] After first `put`, `stat(root / digest[:2]).st_mode & 0o777 == 0o700`
+- [x] After first `put`, `stat(root / digest[:2] / digest[2:]).st_mode & 0o777 == 0o600`
+- [x] Test marked `@pytest.mark.skipif(os.name == 'nt', reason='POSIX modes only')` — Windows skip
+- [x] Mode bits hold even when run with permissive umask (e.g., `umask(0)` in fixture)
 
 **Files to Create/Modify**
 - `tests/unit/adapters/test_blobstore_modes.py`
@@ -137,11 +137,11 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 2.3 — Concurrency / `O_EXCL` race test [S]
 
-- [ ] `concurrent.futures.ThreadPoolExecutor` runs `put(same_content)` 10× in parallel
-- [ ] No exception raised in any thread
-- [ ] Final file count for that digest = 1
-- [ ] All 10 returned digests match
-- [ ] Test runs in < 1 second
+- [x] `concurrent.futures.ThreadPoolExecutor` runs `put(same_content)` 10× in parallel
+- [x] No exception raised in any thread
+- [x] Final file count for that digest = 1
+- [x] All 10 returned digests match
+- [x] Test runs in < 1 second
 
 **Files to Create/Modify**
 - `tests/unit/adapters/test_blobstore_concurrency.py`
@@ -153,8 +153,8 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 ---
 
 **Phase 2 Deliverables:**
-- [ ] `FilesystemBlobStore` complete with ≥ 95% coverage
-- [ ] Mode-bit and concurrency invariants verified
+- [x] `FilesystemBlobStore` complete with ≥ 95% coverage
+- [x] Mode-bit and concurrency invariants verified
 
 ---
 
