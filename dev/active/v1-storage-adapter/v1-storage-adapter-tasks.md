@@ -259,15 +259,15 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 4.1 — Single-row readers [M]
 
-- [ ] `get_run(run_id)` returns hydrated `Run` instance with all fields populated
-- [ ] Tz-aware UTC `datetime` round-trips byte-identical (`written_run == get_run(written_run.run_id)`)
-- [ ] Enum fields rehydrate to enum instances (not bare strings)
-- [ ] `get_run("nonexistent")` returns `None`
-- [ ] `get_spans_for_run(run_id)` returns spans ordered by `span_id` (deterministic)
-- [ ] `get_spans_for_run("nonexistent")` returns `[]`
-- [ ] `get_scores_for_run(run_id)` returns scores; XOR field reads correctly (numeric or label, never both)
-- [ ] Hypothesis property test: round-trip equality for `Run`/`Span`/`Score`/`Example`
-- [ ] `tests/unit/adapters/test_storage_reader.py` covers all of above
+- [x] `get_run(run_id)` returns hydrated `Run` instance with all fields populated
+- [x] Tz-aware UTC `datetime` round-trips byte-identical (`written_run == get_run(written_run.run_id)`)
+- [x] Enum fields rehydrate to enum instances (not bare strings)
+- [x] `get_run("nonexistent")` returns `None`
+- [x] `get_spans_for_run(run_id)` returns spans ordered by `span_id` (deterministic)
+- [x] `get_spans_for_run("nonexistent")` returns `[]`
+- [x] `get_scores_for_run(run_id)` returns scores; XOR field reads correctly (numeric or label, never both)
+- [x] Hypothesis property test: round-trip equality for `Run`/`Span`/`Score`/`Example`
+- [x] `tests/unit/adapters/test_storage_reader.py` covers all of above
 
 **Files to Create/Modify**
 - `plumb/adapters/storage_sqlite.py`
@@ -281,18 +281,18 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 4.2 — List readers [M]
 
-- [ ] `list_runs(limit=10)` returns ≤ 10 rows ordered by `start_ts DESC`
-- [ ] `list_runs(since=dt)` filters `start_ts >= dt` (parameterized; no string concat)
-- [ ] `list_runs(task_id="x")` filters correctly
-- [ ] `list_runs(kind="online")` accepted; rehydrates to `RunKind.ONLINE`
-- [ ] `list_runs(kind="invalid")` raises `ValidationError` BEFORE hitting SQL
-- [ ] All filter combinators compose with `AND` (verify via SQL log capture or instrumented cursor)
-- [ ] `list_examples(active=True)` filters `active=1`
-- [ ] `list_examples(active=False)` filters `active=0`
-- [ ] `list_examples(task_id="x", active=True)` combines filters
-- [ ] `ruff check plumb/adapters/storage_sqlite.py` clean (S608 enforced)
-- [ ] Test with hostile filter values (`"x' OR 1=1 --"`) — query parameterizes correctly, returns empty / matching only literal
-- [ ] Extends `tests/unit/adapters/test_storage_reader.py`
+- [x] `list_runs(limit=10)` returns ≤ 10 rows ordered by `start_ts DESC`
+- [x] `list_runs(since=dt)` filters `start_ts >= dt` (parameterized; no string concat)
+- [x] `list_runs(task_id="x")` filters correctly
+- [x] `list_runs(kind="online")` accepted; rehydrates to `RunKind.ONLINE`
+- [x] `list_runs(kind="invalid")` raises `ValidationError` BEFORE hitting SQL
+- [x] All filter combinators compose with `AND` (verify via SQL log capture or instrumented cursor)
+- [x] `list_examples(active=True)` filters `active=1`
+- [x] `list_examples(active=False)` filters `active=0`
+- [x] `list_examples(task_id="x", active=True)` combines filters
+- [x] `ruff check plumb/adapters/storage_sqlite.py` clean (S608 enforced)
+- [x] Test with hostile filter values (`"x' OR 1=1 --"`) — query parameterizes correctly, returns empty / matching only literal
+- [x] Extends `tests/unit/adapters/test_storage_reader.py`
 
 **Files to Create/Modify**
 - `plumb/adapters/storage_sqlite.py`
@@ -305,9 +305,9 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 ---
 
 **Phase 4 Deliverables:**
-- [ ] Reader surface complete with ≥ 90% coverage
-- [ ] Round-trip property test passing for all four entity types
-- [ ] SQL injection paths verified absent
+- [x] Reader surface complete with ≥ 90% coverage
+- [x] Round-trip property test passing for all four entity types
+- [x] SQL injection paths verified absent
 
 ---
 
@@ -338,11 +338,11 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 5.2 — Concurrent-process opens (WAL semantics) [M]
 
-- [ ] Two adapter instances on same `db_path` both open without error
-- [ ] Reader sees data committed by writer after writer's `with conn:` exits
-- [ ] Writer's open transaction does not block reader's `get_run` / `list_runs` (WAL semantics)
-- [ ] Test runs in < 2 seconds
-- [ ] `tests/integration/test_concurrent_adapters.py` covers both ordering paths
+- [x] Two adapter instances on same `db_path` both open without error
+- [x] Reader sees data committed by writer after writer's `with conn:` exits
+- [x] Writer's open transaction does not block reader's `get_run` / `list_runs` (WAL semantics)
+- [x] Test runs in < 2 seconds
+- [x] `tests/integration/test_concurrent_adapters.py` covers both ordering paths
 
 **Files to Create/Modify**
 - `tests/integration/test_concurrent_adapters.py`
@@ -354,8 +354,8 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 ---
 
 **Phase 5 Deliverables:**
-- [ ] FR-EDGE-2 implemented + tested
-- [ ] Multi-adapter coexistence verified
+- [x] FR-EDGE-2 implemented + tested
+- [x] Multi-adapter coexistence verified
 
 ---
 
