@@ -115,3 +115,55 @@ Before every commit, verify:
 - Never put business logic in API routers — use application layer use cases
 - Never import domain from infrastructure (dependency rule violation)
 - Never commit `.env` files or hardcoded credentials
+
+## Agent Working Rules (Lessons Learned)
+
+These rules exist because we've already paid the cost. Re-read them before any non-trivial change.
+
+### 1. Tests assert behavior — never edit a test to make it green
+
+When a test fails, the default assumption is **the production code is wrong**, not the test. Before changing any test:
+
+- **Read the test's docstring / AC reference** (e.g. `FR-GRAPH-1`, `NFR-Rel-1`). The test is encoding a requirement.
+- **Reproduce the failure and trace the root cause** in the production code path. State the root cause in plain English before touching anything.
+- A test edit is only legitimate when:
+  1. The requirement itself changed (cite the PRD / TRD / task delta), **or**
+  2. The test was asserting an implementation detail that has been refactored away (cite the new contract), **or**
+  3. The test had a genuine bug (wrong fixture, race, stale mock target) — and you can name it.
+- If you find yourself "weakening" an assertion (`assert len(rows) >= 1` instead of `== 2`, removing a field check, swapping `==` for `in`) **stop**. That is the smell of hiding a bug. Fix the production code instead.
+- Mocks/patches must target the **call site the production code actually uses**. When the API surface changes (e.g. `write_run` → `finalize_run`), update the patch target as part of the same commit that changed the production call — not after the test fails.
+- Fakes (`FakeStorageWriter`, etc.) must implement the **full current protocol**. When the port grows a method, the fake grows with it in the same commit.
+
+### 2. Never `git stash` mid-task — branch instead
+
+`git stash` + `git stash pop` silently lost in-progress changes to `plumb/api.py` during Phase 6 and forced a full re-implementation of the lazy singletons + two-phase `__enter__` / `__exit__`. Stash is unsafe whenever:
+
+- Multiple files are mid-edit.
+- A pop could conflict with anything (it will, and the resolution is invisible).
+- You plan to switch context for more than a few seconds.
+
+**Use these instead:**
+
+- **Just commit.** A WIP commit on the current branch is recoverable; a lost stash is not. Squash before PR.
+  ```bash
+  git add -A && git commit -m "wip: <what you were doing>"
+  ```
+- **Spin a scratch branch** for genuine experiments:
+  ```bash
+  git switch -c wip/<topic>
+  ```
+- If you must stash, stash **one file at a time with a message**, verify with `git stash list`, and pop **immediately** in the same shell — never across tool restarts:
+  ```bash
+  git stash push -m "<why>" -- <single/file/path>
+  git stash pop  # same session, same shell, no other edits in between
+  ```
+- After any `git stash pop`, **always** run `git diff` against the file(s) you expected to restore and confirm the restored hunks are present **before** running tests or making further edits.
+
+### 3. Verify the working tree before declaring done
+
+Before saying "all tests pass" or marking a task complete:
+
+1. `git status` — no unintended modifications.
+2. `git diff --stat` — the changed files match the task's expected scope.
+3. Re-run the **full** relevant test suite (`pytest`), not just the file you were editing.
+4. `ruff check .` and `ruff format --check .` — fix what you introduced; don't paper over with `# noqa` unless the suppression is genuinely required (and comment why on the same line).
