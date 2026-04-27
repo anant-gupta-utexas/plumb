@@ -16,7 +16,7 @@ _PRAGMAS: dict[str, str | int] = {
 # journal_mode returns the mode that was set; others return the int value
 _PRAGMA_EXPECTED: dict[str, object] = {
     "journal_mode": "wal",
-    "synchronous": 1,   # NORMAL == 1
+    "synchronous": 1,  # NORMAL == 1
     "busy_timeout": 5000,
     "foreign_keys": 1,
 }
@@ -34,6 +34,4 @@ def verify_pragmas(conn: sqlite3.Connection) -> None:
         row = conn.execute(f"PRAGMA {name}").fetchone()  # noqa: S608
         actual = row[0] if row else None
         if actual != expected:
-            raise StorageError(
-                f"PRAGMA {name}: expected {expected!r}, got {actual!r}"
-            )
+            raise StorageError(f"PRAGMA {name}: expected {expected!r}, got {actual!r}")

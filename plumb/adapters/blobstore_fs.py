@@ -34,7 +34,7 @@ class FilesystemBlobStore:
         # mkdir with mode=0700; explicit chmod defeats permissive umasks
         target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(target.parent.parent, 0o700)  # root
-        os.chmod(target.parent, 0o700)          # fan-out subdir
+        os.chmod(target.parent, 0o700)  # fan-out subdir
 
         try:
             fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
