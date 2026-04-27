@@ -98,8 +98,9 @@ class Run:
     tool_schema_version: str | None = None
     git_sha: str | None = None
     error_type: str | None = None
-    token_count: int | None = None
-    cost_usd: float | None = None
+    tokens_in: int | None = None
+    tokens_out: int | None = None
+    dollar_cost: float | None = None
 
     def __post_init__(self) -> None:
         _require_hex32(self.run_id, "run_id")
@@ -154,7 +155,7 @@ class Score:
     score_id: str
     run_id: str
     metric_name: str
-    scorer_kind: ScorerKind
+    scorer: ScorerKind
     scorer_version: str
     scored_at: datetime
     span_id: str | None = None
