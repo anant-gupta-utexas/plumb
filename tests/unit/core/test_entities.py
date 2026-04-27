@@ -61,7 +61,7 @@ def _score(**overrides: object) -> Score:
         score_id=_HEX32,
         run_id=_HEX32,
         metric_name="accuracy",
-        scorer_kind=ScorerKind.DETERMINISTIC,
+        scorer=ScorerKind.DETERMINISTIC,
         scorer_version="1.0",
         scored_at=_TS,
         value_numeric=0.9,

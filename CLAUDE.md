@@ -4,10 +4,20 @@
 
 This document is the central "signpost" for our repository. It provides quick setup commands, links to our core documentation library, and explains our development workflow.
 
+## Virtual Environment (Claude Agent Rule)
+
+**Always activate the venv using its absolute path before running any Python or shell command.** Worktrees do not inherit the shell's activated venv, so relative `source .venv/bin/activate` will fail with "no such file or directory".
+
+```bash
+source /Users/anant/PersonalProjects/plumb/.venv/bin/activate
+```
+
+This applies at the start of every worktree session — run it before `pytest`, `ruff`, `python`, `uv`, or any other tool that requires the project environment.
+
 ## Quick Start: Developer Setup
 ```bash
 # 1. Set up the virtual environment and install dependencies
-source .venv/bin/activate
+source /Users/anant/PersonalProjects/plumb/.venv/bin/activate
 uv sync
 
 # 2. Run the local read-only HTTP service (optional; notebooks / ad-hoc queries)

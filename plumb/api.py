@@ -256,7 +256,7 @@ class RunHandle:
             score_id=score_id,
             run_id=self._builder.run_id,
             metric_name=metric_name,
-            scorer_kind=ScorerKind(scorer) if isinstance(scorer, str) else scorer,
+            scorer=ScorerKind(scorer) if isinstance(scorer, str) else scorer,
             scorer_version=scorer_version or "unversioned",
             scored_at=_clock.now(),
             span_id=span_id,
