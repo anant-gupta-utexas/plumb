@@ -164,16 +164,16 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 3.1 — Adapter `__init__` + schema bootstrap [M]
 
-- [ ] `SQLiteStorageAdapter(db_path, clock=...)` opens connection successfully
-- [ ] On fresh DB: tables + indexes created; `PRAGMA user_version` returns `1`
-- [ ] On existing v1 DB: re-init is no-op (no error, schema unchanged)
-- [ ] On existing v999 DB: raises `StorageError("Schema version mismatch: db=999 expected=1")`
-- [ ] `apply_pragmas` called on the connection during init
-- [ ] Stalled-run sweep runs once during init (Phase 5 will exhaustively test it; smoke check here)
-- [ ] `plumb.db` file mode is `0o600` after first creation (POSIX-only check)
-- [ ] `close()` is idempotent (calling twice does not error)
-- [ ] Adapter usable as context manager: `with SQLiteStorageAdapter(...) as adapter: ...`
-- [ ] `tests/unit/adapters/test_storage_lifecycle.py` covers fresh-init, re-init, version-mismatch, close-idempotency
+- [x] `SQLiteStorageAdapter(db_path, clock=...)` opens connection successfully
+- [x] On fresh DB: tables + indexes created; `PRAGMA user_version` returns `1`
+- [x] On existing v1 DB: re-init is no-op (no error, schema unchanged)
+- [x] On existing v999 DB: raises `StorageError("Schema version mismatch: db=999 expected=1")`
+- [x] `apply_pragmas` called on the connection during init
+- [x] Stalled-run sweep runs once during init (Phase 5 will exhaustively test it; smoke check here)
+- [x] `plumb.db` file mode is `0o600` after first creation (POSIX-only check)
+- [x] `close()` is idempotent (calling twice does not error)
+- [x] Adapter usable as context manager: `with SQLiteStorageAdapter(...) as adapter: ...`
+- [x] `tests/unit/adapters/test_storage_lifecycle.py` covers fresh-init, re-init, version-mismatch, close-idempotency
 
 **Files to Create/Modify**
 - `plumb/adapters/storage_sqlite.py`
@@ -187,16 +187,16 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 3.2 — `write_run(run, spans)` batched insert [M]
 
-- [ ] Run with 0 spans → 1 `runs` row, 0 `spans` rows; valid (FR-EDGE-3)
-- [ ] Run with 100 spans → 1 + 100 rows in one transaction
-- [ ] Re-inserting same `run_id` raises `StorageError` (PK violation, wrapped with original `__cause__`)
-- [ ] Inserting span with non-existent `run_id` raises `StorageError` (FK violation; defense-in-depth path)
-- [ ] Tz-aware UTC `datetime` serializes to ISO-8601 string with `+00:00`
-- [ ] Naive `datetime` (would have failed entity invariant; should be unreachable) — sanity raise of `StorageError` if it slips through
-- [ ] Enum values serialize to their `.value` strings (not enum names)
-- [ ] `None` for nullable columns persisted as SQL `NULL`
-- [ ] Single transaction verified by `sqlite3.Connection.in_transaction` snapshotted under instrumentation hook
-- [ ] `tests/unit/adapters/test_storage_writer.py` covers all of above
+- [x] Run with 0 spans → 1 `runs` row, 0 `spans` rows; valid (FR-EDGE-3)
+- [x] Run with 100 spans → 1 + 100 rows in one transaction
+- [x] Re-inserting same `run_id` raises `StorageError` (PK violation, wrapped with original `__cause__`)
+- [x] Inserting span with non-existent `run_id` raises `StorageError` (FK violation; defense-in-depth path)
+- [x] Tz-aware UTC `datetime` serializes to ISO-8601 string with `+00:00`
+- [x] Naive `datetime` (would have failed entity invariant; should be unreachable) — sanity raise of `StorageError` if it slips through
+- [x] Enum values serialize to their `.value` strings (not enum names)
+- [x] `None` for nullable columns persisted as SQL `NULL`
+- [x] Single transaction verified by `sqlite3.Connection.in_transaction` snapshotted under instrumentation hook
+- [x] `tests/unit/adapters/test_storage_writer.py` covers all of above
 
 **Files to Create/Modify**
 - `plumb/adapters/storage_sqlite.py`
@@ -210,12 +210,12 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 3.3 — `write_score` + XOR CHECK enforcement [S]
 
-- [ ] Valid score with `value_numeric` only inserts; row readable
-- [ ] Valid score with `value_label` only inserts; row readable
-- [ ] Constructed entity with both values would have failed at entity layer; bypass via raw SQL test confirms `IntegrityError` → `StorageError`
-- [ ] `scorer_version=NULL` would fail (entity prevents but verify SQL also enforces NOT NULL)
-- [ ] `scored_at` tz-aware UTC serializes correctly
-- [ ] `tests/unit/adapters/test_storage_xor_check.py` covers SQL-boundary enforcement
+- [x] Valid score with `value_numeric` only inserts; row readable
+- [x] Valid score with `value_label` only inserts; row readable
+- [x] Constructed entity with both values would have failed at entity layer; bypass via raw SQL test confirms `IntegrityError` → `StorageError`
+- [x] `scorer_version=NULL` would fail (entity prevents but verify SQL also enforces NOT NULL)
+- [x] `scored_at` tz-aware UTC serializes correctly
+- [x] `tests/unit/adapters/test_storage_xor_check.py` covers SQL-boundary enforcement
 
 **Files to Create/Modify**
 - `plumb/adapters/storage_sqlite.py`
@@ -229,12 +229,12 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 3.4 — `write_example` + FK to `runs` [S]
 
-- [ ] Example with valid `origin_run_id` (existing run) inserts
-- [ ] Example with `origin_run_id=None` inserts (column is nullable)
-- [ ] Example with non-existent `origin_run_id` raises `StorageError` (FK violation)
-- [ ] `active=0` and `active=1` both accepted; `active=2` rejected by CHECK → `StorageError`
-- [ ] `source ∈ {'synthetic', 'production_promotion', 'human_authored'}` accepted; other values rejected
-- [ ] Extends `tests/unit/adapters/test_storage_writer.py`
+- [x] Example with valid `origin_run_id` (existing run) inserts
+- [x] Example with `origin_run_id=None` inserts (column is nullable)
+- [x] Example with non-existent `origin_run_id` raises `StorageError` (FK violation)
+- [x] `active=0` and `active=1` both accepted; `active=2` rejected by CHECK → `StorageError`
+- [x] `source ∈ {'synthetic', 'production_promotion', 'human_authored'}` accepted; other values rejected
+- [x] Extends `tests/unit/adapters/test_storage_writer.py`
 
 **Files to Create/Modify**
 - `plumb/adapters/storage_sqlite.py`
@@ -247,9 +247,9 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 ---
 
 **Phase 3 Deliverables:**
-- [ ] All write paths complete
-- [ ] CHECK + FK enforcement verified at SQL boundary
-- [ ] Coverage ≥ 90% on `storage_sqlite.py` (writer paths)
+- [x] All write paths complete
+- [x] CHECK + FK enforcement verified at SQL boundary
+- [x] Coverage ≥ 90% on `storage_sqlite.py` (writer paths + reader helpers)
 
 ---
 
@@ -317,14 +317,14 @@ Update this file as work progresses. Mark `[x]` when each acceptance criterion i
 
 ### Task 5.1 — Stalled-run sweep [S]
 
-- [ ] Run inserted with `end_ts=NULL` and `start_ts` 2 hours ago → marked `stalled` after re-init
-- [ ] Run inserted with `end_ts=NULL` and `start_ts` 30 min ago → unchanged (within threshold)
-- [ ] Run with `end_ts` set → unchanged regardless of age
-- [ ] Run already `stalled`/`aborted`/`failure` → unchanged (status guard prevents double-mark)
-- [ ] INFO log line emitted with the count of marked runs
-- [ ] `stalled_threshold_seconds=60` constructor arg honored (allows fast tests)
-- [ ] Sweep query parameterized (binds threshold_iso via `?`)
-- [ ] Extends `tests/unit/adapters/test_storage_lifecycle.py`
+- [x] Run inserted with `end_ts=NULL` and `start_ts` 2 hours ago → marked `stalled` after re-init
+- [x] Run inserted with `end_ts=NULL` and `start_ts` 30 min ago → unchanged (within threshold)
+- [x] Run with `end_ts` set → unchanged regardless of age
+- [x] Run already `stalled`/`aborted`/`failure` → unchanged (status guard prevents double-mark)
+- [x] INFO log line emitted with the count of marked runs
+- [x] `stalled_threshold_seconds=60` constructor arg honored (allows fast tests)
+- [x] Sweep query parameterized (binds threshold_iso via `?`)
+- [x] Extends `tests/unit/adapters/test_storage_lifecycle.py`
 
 **Files to Create/Modify**
 - `plumb/adapters/storage_sqlite.py`
