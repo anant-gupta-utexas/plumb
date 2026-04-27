@@ -112,9 +112,9 @@ def _example_to_row(example: Example) -> tuple[Any, ...]:
         example.task_id,
         example.inputs_hash,
         example.expected_output_hash,
-        None,                    # rubric — not in entity; stored as NULL
+        None,  # rubric — not in entity; stored as NULL
         example.source.value,
-        None,                    # origin_run_id — not in entity
+        None,  # origin_run_id — not in entity
         1 if example.active else 0,
         _dt_to_iso(example.created_at),
     )
@@ -260,6 +260,7 @@ class SQLiteStorageAdapter:
 
         if os.name != "nt":
             import contextlib
+
             with contextlib.suppress(OSError):
                 os.chmod(self._db_path, 0o600)
 
@@ -273,9 +274,7 @@ class SQLiteStorageAdapter:
         if version == 0:
             self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         elif version != SCHEMA_VERSION:
-            raise StorageError(
-                f"Schema version mismatch: db={version} expected={SCHEMA_VERSION}"
-            )
+            raise StorageError(f"Schema version mismatch: db={version} expected={SCHEMA_VERSION}")
 
     def _sweep_stalled_runs(self) -> None:
         threshold = self._clock.now() - timedelta(seconds=self._stalled_threshold_seconds)
@@ -336,9 +335,7 @@ class SQLiteStorageAdapter:
     # -------------------------------------------------------------------------
 
     def get_run(self, run_id: str) -> Run | None:
-        row = self._conn.execute(
-            "SELECT * FROM runs WHERE run_id = ?", (run_id,)
-        ).fetchone()
+        row = self._conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
         if row is None:
             return None
         return _row_to_run(row)
