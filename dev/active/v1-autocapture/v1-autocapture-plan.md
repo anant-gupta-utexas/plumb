@@ -1,6 +1,6 @@
 # TRS — `plumb/autocapture/` (v1 Autocapture Slice)
 
-**Status:** Draft v1 — derived from [TRD](../../../docs/2_architecture/TRD.md) and [SDD](../../../docs/2_architecture/SYSTEM_DESIGN.md), follows [v1 Core+API TRS](../../archive/v1-core-and-api/v1-core-and-api-plan.md) and [v1 Storage Adapter TRS](../v1-storage-adapter/v1-storage-adapter-plan.md)
+**Status:** Draft v1 — derived from [TRD](../../../docs/2_architecture/TRD.md) and [SDD](../../../docs/2_architecture/SYSTEM_DESIGN.md), follows [v1 Core+API TRS](../../archive/v1-core-and-api/v1-core-and-api-plan.md) and [v1 Storage Adapter TRS](../../archive/v1-storage-adapter/v1-storage-adapter-plan.md)
 **Owner:** anant
 **Last updated:** 2026-04-26
 **Scope:** The third component slice of plumb v1: import-time monkey-patching of the `anthropic` and `openai` SDKs to auto-emit `kind='llm'` spans into the active `RunHandle`. Replaces manual `r.add_span(...)` calls for the two LLM SDKs FR-CAP-1 names.

@@ -68,44 +68,66 @@ with run(task_id="summarise", kind="online", orchestrator_model="claude-sonnet-4
 
 ## Storage
 
-Until you wire a storage adapter, plumb uses a no-op writer — all writes are accepted and silently discarded. This means the quickstart example above runs without any database setup.
+plumb writes all data to a SQLite database and a content-addressed blob store under `$PLUMB_DATA_DIR` (default `~/.plumb/`). Both are created automatically on first use — no manual setup required.
 
-To capture data, assign a writer to `plumb.api._storage_writer`. Once the SQLite storage adapter is available:
+After running the quickstart snippet above:
 
-```python
-import plumb.api as _plumb_api
-from plumb.adapters.storage_sqlite import StorageSQLite
+```bash
+# Inspect the database
+sqlite3 ~/.plumb/plumb.db ".tables"
+# runs  scores  spans  examples
 
-_plumb_api._storage_writer = StorageSQLite(db_path="~/.plumb/plumb.db")
+sqlite3 ~/.plumb/plumb.db "SELECT run_id, task_id, status FROM runs LIMIT 5;"
+
+# Blob store (if any spans used input_hash / output_hash)
+ls ~/.plumb/blobs/
 ```
 
-For tests, use a `FakeStorageWriter` (available in `tests/conftest.py` fixtures):
+### File and directory permissions
+
+plumb enforces strict mode bits to protect your data:
+
+| Path | Mode | Meaning |
+|---|---|---|
+| `~/.plumb/` | `0700` | Only you can list or enter |
+| `~/.plumb/plumb.db` | `0600` | Only you can read or write |
+| `~/.plumb/blobs/<ab>/` | `0700` | Only you can list or enter |
+| `~/.plumb/blobs/<ab>/<cdef…>` | `0600` | Only you can read blob files |
+
+> **iCloud / Dropbox warning:** Sync providers do not preserve POSIX mode bits. If `~/.plumb/` ends up inside a synced folder, the mode bits will not survive a round-trip, which means other users on shared machines could read your data after a sync. Keep `PLUMB_DATA_DIR` outside of any cloud-sync folder.
+
+### Override the data directory
+
+```bash
+PLUMB_DATA_DIR=/tmp/my-plumb-test python my_script.py
+```
+
+or set it permanently in your shell profile:
+
+```bash
+export PLUMB_DATA_DIR="$HOME/.plumb"   # already the default
+```
+
+### For tests — monkeypatch the adapter
+
+In tests, replace the singleton with a fake before the code under test runs:
 
 ```python
+import plumb.api as _api
+
 class FakeStorageWriter:
     def __init__(self):
         self.runs = []
-        self.scores = []
 
     def write_run(self, run, spans):
         self.runs.append((run, spans))
 
-    def write_score(self, score):
-        self.scores.append(score)
+    def write_score(self, score): pass
+    def write_example(self, example): pass
+    def open_run(self, *args, **kwargs): pass
+    def finalize_run(self, *args, **kwargs): self.runs.append(args)
 
-    def write_example(self, example):
-        pass
-
-import plumb.api as _plumb_api
-
-fake = FakeStorageWriter()
-_plumb_api._storage_writer = fake
-
-with run(task_id="test") as r:
-    r.add_span("llm", "call")
-
-assert len(fake.runs) == 1
-assert fake.runs[0][0].task_id == "test"
+monkeypatch.setattr(_api, "_storage_writer", FakeStorageWriter())
 ```
 
 ---
@@ -189,13 +211,16 @@ uv sync --reinstall
 
 ### plumb silently drops writes
 
-If your runs are not appearing in storage, check that `plumb.api._storage_writer` is not still the default `_NoopStorageWriter`. A quick diagnostic:
+If runs are not appearing in `~/.plumb/plumb.db`, check that the storage singleton was initialised. A quick diagnostic:
 
 ```python
 import plumb.api as _api
-print(type(_api._storage_writer))
-# Should be your adapter class, not _NoopStorageWriter
+print(type(_api._storage))
+# Should be SQLiteStorageAdapter, not None
+# (None means _init_storage_singletons has not been called yet)
 ```
+
+The singleton is initialised lazily on the first `with run(...)` / `@run(...)` call. If you are inspecting the module before any run, `_storage` will be `None` — that is expected.
 
 ---
 

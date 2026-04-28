@@ -1,8 +1,8 @@
 # plumb — System Design Document (SDD)
 
-**Status:** Draft v1 — synthesized from [PRD](../1_product_and_research/PRD.md) and [TRD](TRD.md)
+**Status:** v1 (storage adapter slice implemented) — synthesized from [PRD](../1_product_and_research/PRD.md) and [TRD](TRD.md)
 **Owner:** anant
-**Last updated:** 2026-04-23
+**Last updated:** 2026-04-27
 **Scope:** plumb v1 (Phase 1 ship, Week 6 target per PRD §8)
 
 > **Reading order.** This SDD is the **visual, architecture-first blueprint** — what the system looks like, how the pieces fit, and which trade-offs were made. The **"why the product exists"** lives in `[../1_product_and_research/PRD.md](../1_product_and_research/PRD.md)`. The **normative "what to build" spec** (FR/NFR IDs, SQL constraints, acceptance criteria) lives in `[TRD.md](TRD.md)`. The **canonical schema + metric derivation** lives in `[../1_product_and_research/schema-and-metrics-v1.md](../1_product_and_research/schema-and-metrics-v1.md)`. This document references those; it does not restate them.
@@ -170,7 +170,7 @@ erDiagram
         INTEGER tokens_in
         INTEGER tokens_out
         REAL dollar_cost
-        TEXT status "success | failure | aborted | stalled"
+        TEXT status "pending | success | failure | aborted | stalled"
     }
     spans {
         TEXT span_id PK

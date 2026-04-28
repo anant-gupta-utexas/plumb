@@ -20,7 +20,7 @@ This document captures the *why* behind the TRS — design rationale, files touc
 v1-core-and-api/         ← MERGED — contextvar `_active_run`, `RunHandle.add_span` exist
         │
         ▼
-v1-storage-adapter/      ← TRS DRAFTED, IMPLEMENTATION PENDING — provides BlobStore + StorageWriter singletons
+v1-storage-adapter/      ← MERGED — provides BlobStore + StorageWriter singletons (see dev/archive/v1-storage-adapter/)
         │
         ▼
 v1-autocapture/   (this) ← TRS DRAFTED — first slice to actually USE the BlobStore on the hot path
@@ -148,7 +148,7 @@ These are tracked here (not in `docs/2_architecture/deferred-features.md`) becau
 - **Calls:** `RunHandle.add_span(kind=SpanKind.LLM, name=..., input_hash=..., output_hash=..., tokens=(in, out), latency_ms=..., status=..., error_type=...)`. **No changes to `add_span` signature** — autocapture is a pure consumer.
 - **Respects:** `RunHandle._builder.aborted` semantics — `add_span` after abort no-ops, so autocapture inherits this behavior automatically.
 
-### 6.2 With v1-storage-adapter/ (TRS drafted, impl pending)
+### 6.2 With v1-storage-adapter/ (MERGED — see dev/archive/v1-storage-adapter/)
 
 - **Reads:** `plumb.api._blobstore` inside `_emit.emit_*` to put request/response bytes.
 - **Indirect:** `RunHandle.add_span` buffers the span; `StorageWriter.write_run` (run-close path) persists it. Autocapture does NOT touch the storage writer directly.

@@ -124,6 +124,7 @@ def _init_storage_singletons() -> None:
     _blobstore = FilesystemBlobStore(data_dir / "blobs")
     _storage_writer = _storage
 
+
 # ---------------------------------------------------------------------------
 # Contextvar — tracks the active RunHandle in the current task/thread
 # ---------------------------------------------------------------------------

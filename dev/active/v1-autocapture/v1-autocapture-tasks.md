@@ -10,7 +10,7 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 ## Pre-flight
 
-- [ ] **v1-storage-adapter slice MERGED.** This slice's integration tests assert against a real `BlobStore` and the lazy `_init_storage_singletons()` integration point. If storage isn't merged, this slice is blocked.
+- [x] **v1-storage-adapter slice MERGED.** (archived at `dev/archive/v1-storage-adapter/`) — BlobStore + StorageWriter singletons and `_init_storage_singletons()` are available.
 - [ ] **anthropic + openai SDKs added to `[dependency-groups].dev` in `pyproject.toml`.** Required for integration tests; runtime soft-deps already declared.
 - [ ] **Working branch created:** `feat/v1-autocapture` from `main`.
 
