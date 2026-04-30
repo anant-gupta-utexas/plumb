@@ -8,15 +8,16 @@ from unittest.mock import patch
 
 import pytest
 
+import plumb.autocapture as _autocapture
 import plumb.autocapture._state as state
-from plumb.autocapture._openai import _wrap_async, _wrap_sync
+from plumb.autocapture._openai import _CHAT_MODULE, _RESPONSES_MODULE, _wrap_async, _wrap_sync
 
 
 @pytest.fixture(autouse=True)
 def clean_registry():
-    state._INSTALLED.clear()
+    _autocapture.uninstall()
     yield
-    state._INSTALLED.clear()
+    _autocapture.uninstall()
 
 
 # ---------------------------------------------------------------------------
@@ -31,6 +32,23 @@ class TestTryInstallNoSdk:
 
             _try_install()
         assert len(state._INSTALLED) == 0
+
+    def test_registers_four_targets_when_openai_installed(self) -> None:
+        pytest.importorskip("openai")
+        from plumb.autocapture._openai import _try_install
+
+        _try_install()
+
+        assert {
+            f"{_CHAT_MODULE}.Completions.create",
+            f"{_CHAT_MODULE}.AsyncCompletions.create",
+            f"{_RESPONSES_MODULE}.Responses.create",
+            f"{_RESPONSES_MODULE}.AsyncResponses.create",
+        }.issubset(state._INSTALLED)
+
+        before = dict(state._INSTALLED)
+        _try_install()
+        assert state._INSTALLED == before
 
 
 # ---------------------------------------------------------------------------

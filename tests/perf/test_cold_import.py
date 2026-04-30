@@ -1,29 +1,30 @@
-"""NFR-Perf-6: cold import gate (Task 7.2).
+"""NFR-Perf-6: cold import gate (autocapture Task 6.3).
 
-Subprocess import of `plumb` must complete within 400 ms.
-Warns (but does not fail) at 200 ms.
+Subprocess import of `plumb` must complete within 200 ms.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
-import warnings
 
 import pytest
 
 
 @pytest.mark.perf
-def test_cold_import_within_budget() -> None:
-    """plumb cold import: warn >200 ms, fail >400 ms."""
-    WARN_MS = 200
-    FAIL_MS = 400
+@pytest.mark.parametrize("autocapture_env", ["0", "1"])
+def test_cold_import_within_budget(autocapture_env: str) -> None:
+    """plumb cold import: fail above the 200 ms NFR-Perf-6 budget."""
+    FAIL_MS = 200
+    env = {**os.environ, "PLUMB_AUTOCAPTURE": autocapture_env}
 
     result = subprocess.run(
         [sys.executable, "-X", "importtime", "-c", "import plumb"],
         capture_output=True,
         text=True,
+        env=env,
         timeout=10,
     )
     assert result.returncode == 0, f"import plumb failed:\n{result.stderr}"
@@ -43,12 +44,11 @@ def test_cold_import_within_budget() -> None:
 
     print(f"\nplumb cold import: {elapsed_ms:.1f} ms")
 
-    if elapsed_ms > WARN_MS:
-        warnings.warn(
-            f"plumb cold import took {elapsed_ms:.1f} ms (> {WARN_MS} ms warn threshold)",
-            stacklevel=1,
-        )
-
     assert elapsed_ms <= FAIL_MS, (
         f"plumb cold import {elapsed_ms:.1f} ms exceeds hard limit of {FAIL_MS} ms"
     )
+
+    for forbidden in ("anthropic", "openai"):
+        assert not re.search(rf"^import time:.*\b{forbidden}\b", result.stderr, re.MULTILINE), (
+            f"import plumb eagerly imported {forbidden} with PLUMB_AUTOCAPTURE={autocapture_env}"
+        )

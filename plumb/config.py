@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     data_dir: Path = Path.home() / ".plumb"
     log_level: str = "WARNING"
-    autocapture: bool = False
+    autocapture: bool = True
 
     model_config = {"env_prefix": "PLUMB_", "case_sensitive": False}
 

@@ -22,6 +22,9 @@ class TestPublicSurface:
         assert hasattr(plumb, "__all__")
         assert "run" in plumb.__all__
         assert "RunHandle" in plumb.__all__
+        assert "autocapture_install" in plumb.__all__
+        assert "autocapture_uninstall" in plumb.__all__
+        assert "autocapture_is_installed" in plumb.__all__
 
     def test_version_literal(self) -> None:
         assert plumb.__version__ == "0.1.0"
@@ -44,6 +47,9 @@ class TestPublicSurface:
         from plumb.api import run as api_run
 
         assert plumb.run is api_run
+        assert callable(plumb.autocapture_install)
+        assert callable(plumb.autocapture_uninstall)
+        assert callable(plumb.autocapture_is_installed)
 
     def test_no_eager_heavy_imports(self) -> None:
         """Cold-import must not pull in heavy optional libraries."""

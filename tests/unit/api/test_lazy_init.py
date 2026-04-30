@@ -51,7 +51,9 @@ def test_init_storage_singletons_noop_when_already_set(
     monkeypatch.setattr(_api, "_storage", fake_storage)
 
     # Patch the lazy imports so they would fail loudly if called
-    with patch.dict(sys.modules, {"plumb.adapters.storage_sqlite": None}):  # type: ignore[dict-item]
+    with patch.dict(
+        sys.modules, {"plumb.adapters.storage_sqlite": None}
+    ):  # type: ignore[dict-item]
         _api._init_storage_singletons()
 
     # _storage unchanged
@@ -82,7 +84,10 @@ def test_init_storage_singletons_creates_real_adapters(
         patch("plumb.adapters.storage_sqlite.SQLiteStorageAdapter.__init__", return_value=None),
         patch("plumb.adapters.blobstore_fs.FilesystemBlobStore.__init__", return_value=None),
         patch("plumb.config.ensure_data_dir", return_value=data_dir),
-        patch("plumb.config.get_settings", return_value=Settings(data_dir=data_dir)),
+        patch(
+            "plumb.config.get_settings",
+            return_value=Settings(data_dir=data_dir, autocapture=False),
+        ),
         patch("plumb.adapters.storage_sqlite.SQLiteStorageAdapter", return_value=fake_sa),
         patch("plumb.adapters.blobstore_fs.FilesystemBlobStore", return_value=fake_bs),
     ):
@@ -116,7 +121,10 @@ def test_init_storage_singletons_second_call_is_noop(
 
     with (
         patch("plumb.config.ensure_data_dir", return_value=data_dir),
-        patch("plumb.config.get_settings", return_value=Settings(data_dir=data_dir)),
+        patch(
+            "plumb.config.get_settings",
+            return_value=Settings(data_dir=data_dir, autocapture=False),
+        ),
         patch.object(SQLiteStorageAdapter, "__init__", counting_init),
     ):
         _api._init_storage_singletons()

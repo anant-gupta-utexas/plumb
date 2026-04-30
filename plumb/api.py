@@ -126,10 +126,16 @@ def _init_storage_singletons() -> None:
     from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
     from plumb.config import ensure_data_dir, get_settings
 
-    data_dir = ensure_data_dir(get_settings())
+    settings = get_settings()
+    data_dir = ensure_data_dir(settings)
     _storage = SQLiteStorageAdapter(data_dir / "plumb.db", clock=_clock)
     _blobstore = FilesystemBlobStore(data_dir / "blobs")
     _storage_writer = _storage
+
+    if settings.autocapture:
+        import plumb.autocapture as autocapture
+
+        autocapture.install()
 
 
 # ---------------------------------------------------------------------------

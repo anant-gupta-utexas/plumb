@@ -2,7 +2,7 @@
 
 **Companion to:** [`v1-autocapture-plan.md`](./v1-autocapture-plan.md) and [`v1-autocapture-context.md`](./v1-autocapture-context.md)
 **Owner:** anant
-**Last updated:** 2026-04-29 (Phase 3 + 4 complete)
+**Last updated:** 2026-04-30 (Phase 5 + 6 complete)
 
 This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M = 1–4 hr, L = 4–8 hr, XL = > 8 hr), the files it touches, acceptance criteria, dependencies on other tasks, and testing requirements. Phases are sequential top-to-bottom; within a phase, tasks run in declared order unless flagged parallel.
 
@@ -236,9 +236,9 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** Per TRS §3.5. Targets `openai.resources.chat.completions.Completions.create` and `AsyncCompletions.create`. Sync wrapper per the same skeleton as anthropic, calling `canonicalize_openai_chat_*`.
 - **Acceptance Criteria:**
-    - [ ] `_try_install` no-ops without openai.
-    - [ ] `_state._INSTALLED` contains the four expected keys after install (Chat sync+async + Responses sync+async).
-    - [ ] Idempotent.
+    - [x] `_try_install` no-ops without openai.
+    - [x] `_state._INSTALLED` contains the four expected keys after install (Chat sync+async + Responses sync+async).
+    - [x] Idempotent.
 - **Files to Create/Modify:**
     - `plumb/autocapture/_openai.py` — new
     - `tests/unit/autocapture/test_openai_install.py` — new
@@ -249,10 +249,10 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** Async sibling of Task 5.1. Integration test mirrors anthropic test: real `OpenAI` / `AsyncOpenAI` client with `http_client=` set to a custom in-process httpx client returning canned chat completions. Assert `Span.name` is `"openai/chat/<model>"`.
 - **Acceptance Criteria:**
-    - [ ] Sync integration: `client.chat.completions.create(...)` inside a run produces one `kind='llm'` span with `name='openai/chat/gpt-4o'` (or whatever stub model).
-    - [ ] Async integration: same with `AsyncOpenAI`.
-    - [ ] FR-CAP-3: response object type unchanged.
-    - [ ] FR-EDGE-1: simulated `openai.RateLimitError` → exception re-raised + failure span recorded.
+    - [x] Sync integration: `client.chat.completions.create(...)` inside a run produces one `kind='llm'` span with `name='openai/chat/gpt-4o'` (or whatever stub model).
+    - [x] Async integration: same with `AsyncOpenAI`.
+    - [x] FR-CAP-3: response object type unchanged.
+    - [x] FR-EDGE-1: simulated `openai.RateLimitError` → exception re-raised + failure span recorded.
 - **Files to Create/Modify:**
     - `plumb/autocapture/_openai.py` — extend (Chat async)
     - `tests/integration/autocapture/test_openai_capture.py` — new
@@ -263,9 +263,9 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** Add wrappers for `Responses.create` / `AsyncResponses.create`. Span name `"openai/responses/<model>"`.
 - **Acceptance Criteria:**
-    - [ ] Sync integration test for `client.responses.create(...)`.
-    - [ ] Async integration test for `await client.responses.create(...)`.
-    - [ ] Token counts pulled from `response.usage.input_tokens` / `output_tokens` (Responses API uses the same names as Anthropic, NOT chat's `prompt_tokens`).
+    - [x] Sync integration test for `client.responses.create(...)`.
+    - [x] Async integration test for `await client.responses.create(...)`.
+    - [x] Token counts pulled from `response.usage.input_tokens` / `output_tokens` (Responses API uses the same names as Anthropic, NOT chat's `prompt_tokens`).
 - **Files to Create/Modify:**
     - `plumb/autocapture/_openai.py` — extend (Responses)
     - `tests/integration/autocapture/test_openai_capture.py` — extend
@@ -276,9 +276,9 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** Add tests that call both providers with `stream=True` and assert (a) the user's stream still works, (b) one span recorded with `error_type='unsupported_stream_capture'`, `status='success'`, `output_hash=None`, `tokens=None`.
 - **Acceptance Criteria:**
-    - [ ] Anthropic `messages.stream(...)` test passes.
-    - [ ] OpenAI `chat.completions.create(stream=True)` test passes.
-    - [ ] User receives a working iterator/stream from the SDK.
+    - [x] Anthropic `messages.stream(...)` test passes.
+    - [x] OpenAI `chat.completions.create(stream=True)` test passes.
+    - [x] User receives a working iterator/stream from the SDK.
 - **Files to Create/Modify:**
     - `tests/integration/autocapture/test_streaming_unsupported.py` — new
 - **Dependencies:** Tasks 4.2 + 5.3
@@ -298,10 +298,10 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** In `plumb/api.py`'s `_init_storage_singletons()` (added by storage slice), after `_blobstore` is set, conditionally call `plumb.autocapture.install()` when `Settings.autocapture is True`. Lazy import inside the function body.
 - **Acceptance Criteria:**
-    - [ ] `import plumb` does NOT trigger `import anthropic` / `import openai` (verified by Task 6.3).
-    - [ ] First `with run(...)` triggers `_init_storage_singletons` which then triggers `autocapture.install()`.
-    - [ ] With `PLUMB_AUTOCAPTURE=0`, install is skipped; `is_installed()` returns False.
-    - [ ] Idempotent — multiple runs in the same process call `install()` only once (covered by `is_installed` early-return inside `install`).
+    - [x] `import plumb` does NOT trigger `import anthropic` / `import openai` (verified by Task 6.3).
+    - [x] First `with run(...)` triggers `_init_storage_singletons` which then triggers `autocapture.install()`.
+    - [x] With `PLUMB_AUTOCAPTURE=0`, install is skipped; `is_installed()` returns False.
+    - [x] Idempotent — multiple runs in the same process call `install()` only once (covered by `is_installed` early-return inside `install`).
 - **Files to Create/Modify:**
     - `plumb/api.py` — modify `_init_storage_singletons()`
     - `tests/integration/autocapture/test_lazy_install.py` — new
@@ -312,8 +312,8 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** Add `autocapture_install`, `autocapture_uninstall`, `autocapture_is_installed` to `plumb/__init__.py` and `__all__`.
 - **Acceptance Criteria:**
-    - [ ] `from plumb import autocapture_install` works.
-    - [ ] `tests/unit/test_public_surface.py::test_only_run_is_public_entry_point` STILL PASSES (autocapture_* names are configuration utilities, not instrumentation entry points; the test's allowlist is updated accordingly).
+    - [x] `from plumb import autocapture_install` works.
+    - [x] `tests/unit/test_public_surface.py::test_only_run_is_public_entry_point` STILL PASSES (autocapture_* names are configuration utilities, not instrumentation entry points; the test's allowlist is updated accordingly).
 - **Files to Create/Modify:**
     - `plumb/__init__.py` — modify
     - `tests/unit/test_public_surface.py` — modify allowlist
@@ -324,9 +324,9 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** Re-run the storage slice's cold-import test with `PLUMB_AUTOCAPTURE=1` set in the subprocess environment. Assert (a) total `import plumb` ≤ 200 ms, (b) stderr from `python -X importtime` does NOT mention `import anthropic` or `import openai`.
 - **Acceptance Criteria:**
-    - [ ] Cold-import time ≤ 200 ms on CI runner (with 2× headroom locally).
-    - [ ] Subprocess stderr grep for `^import time:.*\banthropic\b` returns empty.
-    - [ ] Subprocess stderr grep for `^import time:.*\bopenai\b` returns empty.
+    - [x] Cold-import time ≤ 200 ms on CI runner (with 2× headroom locally).
+    - [x] Subprocess stderr grep for `^import time:.*\banthropic\b` returns empty.
+    - [x] Subprocess stderr grep for `^import time:.*\bopenai\b` returns empty.
 - **Files to Create/Modify:**
     - `tests/perf/test_cold_import.py` — extend (parametrize over `PLUMB_AUTOCAPTURE` env)
 - **Dependencies:** Task 6.2

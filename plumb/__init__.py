@@ -1,4 +1,9 @@
 from plumb.api import RunHandle, run
+from plumb.autocapture import (
+    install as autocapture_install,
+    is_installed as autocapture_is_installed,
+    uninstall as autocapture_uninstall,
+)
 from plumb.core.entities import (
     Example,
     ExampleSource,
@@ -26,6 +31,9 @@ __version__ = "0.1.0"  # hardcoded per context §6 item 1; switch to importlib.m
 __all__ = [
     "run",
     "RunHandle",  # public for type hints only; direct construction raises TypeError
+    "autocapture_install",
+    "autocapture_uninstall",
+    "autocapture_is_installed",
     "RunKind",
     "RunStatus",
     "SpanKind",
