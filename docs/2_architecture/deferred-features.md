@@ -285,4 +285,18 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ---
 
+### v2 — `plumb run stats` top-level-only vs. all-runs display
+
+- **Decision:** deferred to v2
+- **Date:** 2026-04-29
+- **Context:** `plumb run stats` shows all runs flat (including sub-agent child runs where `parent_run_id IS NOT NULL`). For orchestrator systems with many sub-agents per task, the output can be noisy. PRD Tier-1 metrics don't require grouping; flat output is correct for v1 use cases.
+- **Options considered:**
+  - **Flat, all runs (chosen for v1)** — simple; `--task-id` filter narrows scope adequately. Resolved in v1-cli TRS PD-3.
+  - *Top-level only by default with `--include-children` flag* — cleaner default for multi-agent workflows; slightly more implementation.
+  - *Group-by-parent display* — most informative; most complex.
+- **Rationale for current pick:** Simplest implementation; `--task-id` gives enough narrowing for Week 6 use cases. No user feedback yet to justify the UX investment.
+- **Revisit trigger:** First user complaint about sub-agent runs cluttering `plumb run stats` output, or when >50% of recorded runs are child runs.
+
+---
+
 *End of backlog. Append new entries at the bottom of the appropriate group.*
