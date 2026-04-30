@@ -83,7 +83,7 @@ graph TD
     subgraph autocapture ["plumb/autocapture/"]
         ACAnthropic["anthropic monkey-patch"]
         ACOpenAI["openai monkey-patch"]
-        ACHttpx["httpx monkey-patch"]
+        ACHttpx["httpx monkey-patch<br/>(follow-up slice)"]
     end
 
     subgraph adapters ["plumb/adapters/"]
@@ -125,7 +125,7 @@ graph TD
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
 | `plumb/core/`                           | Pure-Python entities, ports (Protocols), and stats helpers. No I/O, no network, no SDK imports. `mypy --strict` clean.                                                                                                   | [TRD NFR-Use-3](TRD.md)                         |
 | `plumb/api.py`                          | Public `run` callable (decorator + context manager, sync + async). Owns contextvars for run nesting and `parent_run_id` propagation. Exposes `Run` handle with `add_score`, `add_span`, `set_models`, `abort`.           | [TRD FR-API-1..4](TRD.md), [FR-GRAPH-1](TRD.md) |
-| `plumb/autocapture/`                    | Import-time monkey-patch installers for `anthropic`, `openai`, `httpx`. Opt-out via `PLUMB_AUTOCAPTURE=0`. Must not mutate caller-visible SDK behaviour.                                                                 | [TRD FR-CAP-1..3](TRD.md)                       |
+| `plumb/autocapture/`                    | Import-time monkey-patch installers for `anthropic` and `openai`; direct `httpx` capture remains a follow-up slice. Opt-out via `PLUMB_AUTOCAPTURE=0`. Must not mutate caller-visible SDK behaviour.     | [TRD FR-CAP-1..3](TRD.md)                       |
 | `plumb/adapters/storage_sqlite.py`      | Implements `StorageWriter`/`StorageReader` ports. Owns SQLite connection pragmas (`journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout=5000`, `foreign_keys=ON`), STRICT table creation, batched INSERT on run close. | [TRD §7.1](TRD.md), [NFR-Perf-3/4](TRD.md)      |
 | `plumb/adapters/blobstore_fs.py`        | Content-addressed filesystem blob store at `$PLUMB_DATA_DIR/blobs/<ab>/<cdef…>`. `O_CREAT\|O_EXCL` writes, mode `0600`/`0700`.                                                                                            | [TRD DATA-BLOB-1..5](TRD.md)                    |
 | `plumb/adapters/judge_anthropic.py`     | Native Anthropic SDK adapter. Prompt caching, explicit betas. Off the hot path — only used by `plumb judge run`.                                                                                                         | [TRD INT-JUDGE-1](TRD.md)                       |
@@ -334,6 +334,7 @@ Key properties visible in the flow:
 - Cross-process parenting requires explicit `parent_run_id=` argument (plumb does not inject across subprocess boundaries; [TRD FR-GRAPH-2](TRD.md)).
 - Hand-offs are spans of `kind='handoff'` on the parent run, with `input_hash` (brief) and `output_hash` (summary). The round-trip QA probe for the `handoff_roundtrip` metric reads these from the blob store ([TRD FR-GRAPH-3](TRD.md)).
 - Each run close is one transaction, one fsync — no per-span fsync ([TRD NFR-Perf-4](TRD.md)).
+- Autocapture's `_emit` path writes payload bytes through `BlobStore` and appends via `RunHandle.add_span`; it never touches `StorageWriter` directly, so captured spans use the same buffered run-close transaction as manual spans.
 
 ### 5.2 Secondary flow: `plumb judge run`
 

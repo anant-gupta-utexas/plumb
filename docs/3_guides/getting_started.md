@@ -64,6 +64,34 @@ with run(task_id="summarise", kind="online", orchestrator_model="claude-sonnet-4
 # Run, span, and score are written to storage here
 ```
 
+## Autocapture works automatically
+
+With `PLUMB_AUTOCAPTURE=1` (the default), plumb automatically patches supported
+SDK calls the first time a run starts. Any `anthropic` Messages call or `openai`
+Chat Completions / Responses call inside a `@run` or `with run(...)` block is
+captured as a `kind="llm"` span.
+
+```python
+import anthropic
+from plumb import run
+
+client = anthropic.Anthropic(api_key="sk-...")
+
+with run(task_id="llm-summary") as r:
+    client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=128,
+        messages=[{"role": "user", "content": "Summarise this text."}],
+    )
+# plumb records one llm span with redacted request/response blobs
+```
+
+Opt out with `PLUMB_AUTOCAPTURE=0`, or control patching manually with
+`plumb.autocapture_install()` and `plumb.autocapture_uninstall()`. Direct `httpx`
+tool-call capture and full streaming response capture are follow-up slices;
+streaming calls currently keep the SDK stream working and record an unsupported
+stream marker span.
+
 ---
 
 ## Storage
@@ -140,7 +168,7 @@ plumb reads configuration from `PLUMB_*` environment variables. All have sensibl
 |---|---|---|
 | `PLUMB_DATA_DIR` | `~/.plumb` | Root directory for SQLite DB and blobs |
 | `PLUMB_LOG_LEVEL` | `WARNING` | Python logging level for plumb internals |
-| `PLUMB_AUTOCAPTURE` | `false` | Enable automatic SDK monkey-patching on import |
+| `PLUMB_AUTOCAPTURE` | `true` | Enable automatic SDK monkey-patching on first run |
 
 Set them in a `.env` file or export them before running your code. Settings are read once and cached.
 
