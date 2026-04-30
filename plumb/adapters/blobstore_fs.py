@@ -31,10 +31,17 @@ class FilesystemBlobStore:
         digest = hashlib.sha256(content).hexdigest()
         target = self._root / digest[:2] / digest[2:]
 
-        # mkdir with mode=0700; explicit chmod defeats permissive umasks
-        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        os.chmod(target.parent.parent, 0o700)  # root
-        os.chmod(target.parent, 0o700)  # fan-out subdir
+        # mkdir with mode=0700; explicit chmod defeats permissive umasks.
+        # chmod calls are skipped when the directory already exists — mode bits
+        # don't change between puts and the syscalls are otherwise redundant.
+        subdir = target.parent
+        if not subdir.exists():
+            subdir.mkdir(mode=0o700, parents=True, exist_ok=True)
+            os.chmod(subdir.parent, 0o700)  # root (created alongside subdir)
+            os.chmod(subdir, 0o700)  # fan-out subdir
+        else:
+            # Root might not exist yet if subdir was created externally; ensure it.
+            subdir.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
 
         try:
             fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)

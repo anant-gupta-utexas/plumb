@@ -25,13 +25,13 @@ _PRAGMA_EXPECTED: dict[str, object] = {
 def apply_pragmas(conn: sqlite3.Connection) -> None:
     """Apply WAL + durability + FK pragmas. Safe to call multiple times."""
     for name, value in _PRAGMAS.items():
-        conn.execute(f"PRAGMA {name}={value}")  # noqa: S608 — pragma names are literals
+        conn.execute(f"PRAGMA {name}={value}")  # noqa: S608 — name/value come from module-level literal dict, not user input
 
 
 def verify_pragmas(conn: sqlite3.Connection) -> None:
     """Raise StorageError if any required pragma is not at the expected value."""
     for name, expected in _PRAGMA_EXPECTED.items():
-        row = conn.execute(f"PRAGMA {name}").fetchone()  # noqa: S608
+        row = conn.execute(f"PRAGMA {name}").fetchone()  # noqa: S608 — name comes from module-level literal dict, not user input
         actual = row[0] if row else None
         if actual != expected:
             raise StorageError(f"PRAGMA {name}: expected {expected!r}, got {actual!r}")

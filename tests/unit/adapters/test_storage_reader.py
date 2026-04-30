@@ -48,7 +48,7 @@ def test_dt_to_iso_none_returns_none() -> None:
 
 
 def test_dt_to_iso_naive_raises() -> None:
-    with pytest.raises(StorageError, match="timezone-aware"):
+    with pytest.raises(ValidationError, match="timezone-aware"):
         _dt_to_iso(datetime(2026, 1, 1, 12, 0, 0))
 
 

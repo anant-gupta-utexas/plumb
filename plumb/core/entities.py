@@ -118,7 +118,14 @@ class Run:
 
 @dataclass(frozen=True, slots=True)
 class Span:
-    """A single unit of work within a run (TRD §7.1 spans table)."""
+    """A single unit of work within a run (TRD §7.1 spans table).
+
+    Token storage contract: the DB schema has a single ``tokens`` column.
+    On write, ``tokens_in + tokens_out`` is summed and stored.  On read, the
+    sum is surfaced as ``tokens_in``; ``tokens_out`` is always ``None``.
+    The in/out split is informational at the entity layer — it is not durable.
+    (v2 deferred: split into ``tokens_in`` + ``tokens_out`` columns.)
+    """
 
     span_id: str
     run_id: str
@@ -192,7 +199,8 @@ class Example:
     created_at: datetime
     expected_output_hash: str | None = None
     active: bool = True
-    tags: str | None = None
+    rubric: str | None = None
+    origin_run_id: str | None = None
 
     def __post_init__(self) -> None:
         _require_hex32(self.example_id, "example_id")
@@ -202,6 +210,8 @@ class Example:
         _require_tz(self.created_at, "created_at")
         if self.expected_output_hash is not None:
             _require_hex64(self.expected_output_hash, "expected_output_hash")
+        if self.origin_run_id is not None:
+            _require_hex32(self.origin_run_id, "origin_run_id")
 
 
 @dataclass(frozen=True, slots=True)

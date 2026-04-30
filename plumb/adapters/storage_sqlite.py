@@ -5,12 +5,13 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
+import threading
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from plumb.adapters._pragmas import apply_pragmas
+from plumb.adapters._pragmas import apply_pragmas, verify_pragmas
 from plumb.adapters._schema import DDL_STATEMENTS, SCHEMA_VERSION
 from plumb.core.entities import (
     Example,
@@ -39,7 +40,7 @@ def _dt_to_iso(dt: datetime | None) -> str | None:
     if dt is None:
         return None
     if dt.tzinfo is None:
-        raise StorageError("datetime must be timezone-aware before storage")
+        raise ValidationError("datetime must be timezone-aware before storage")
     return dt.isoformat()
 
 
@@ -112,9 +113,9 @@ def _example_to_row(example: Example) -> tuple[Any, ...]:
         example.task_id,
         example.inputs_hash,
         example.expected_output_hash,
-        None,  # rubric — not in entity; stored as NULL
+        example.rubric,
         example.source.value,
-        None,  # origin_run_id — not in entity
+        example.origin_run_id,
         1 if example.active else 0,
         _dt_to_iso(example.created_at),
     )
@@ -142,8 +143,9 @@ def _row_to_run(row: sqlite3.Row) -> Run:
 
 
 def _row_to_span(row: sqlite3.Row) -> Span:
-    # DB has a single `tokens` column; entity tracks tokens_in/tokens_out separately.
-    # On read, the stored total is surfaced as tokens_in; tokens_out stays None.
+    # DB stores a single `tokens` total (tokens_in + tokens_out); surfaced as
+    # tokens_in on read.  tokens_out is always None after a round-trip.
+    # See Span docstring and deferred-features.md for the v2 column-split plan.
     tokens_in: int | None = None
     tokens_out: int | None = None
     if row["tokens"] is not None:
@@ -191,7 +193,8 @@ def _row_to_example(row: sqlite3.Row) -> Example:
         source=ExampleSource(row["source"]),
         active=bool(row["active"]),
         created_at=_iso_to_dt(row["created_at"]),  # type: ignore[arg-type]
-        tags=None,
+        rubric=row["rubric"],
+        origin_run_id=row["origin_run_id"],
     )
 
 
@@ -264,6 +267,7 @@ class SQLiteStorageAdapter:
         self._clock = clock
         self._stalled_threshold_seconds = stalled_threshold_seconds
         self._closed = False
+        self._write_lock = threading.Lock()
 
         self._db_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
 
@@ -276,6 +280,7 @@ class SQLiteStorageAdapter:
         self._conn.row_factory = sqlite3.Row
 
         apply_pragmas(self._conn)
+        verify_pragmas(self._conn)
         self._bootstrap_schema()
         self._sweep_stalled_runs()
 
@@ -300,14 +305,16 @@ class SQLiteStorageAdapter:
     def _sweep_stalled_runs(self) -> None:
         threshold = self._clock.now() - timedelta(seconds=self._stalled_threshold_seconds)
         threshold_iso = threshold.isoformat()
-        # 'pending' rows are mid-flight runs (INSERT-on-enter); they are the
-        # primary target of the sweep.  The broader NOT IN guard is defense-in-depth.
+        # Only 'pending' rows (open_run without a matching finalize_run) can be
+        # stalled.  All terminal statuses (success/failure/aborted) are set
+        # atomically with end_ts in finalize_run, so end_ts IS NULL ⇒ status='pending'
+        # is a schema invariant.  Targeting status='pending' directly surfaces
+        # any invariant violation rather than silently masking it.
         cur = self._conn.execute(
             """
             UPDATE runs
             SET status = 'stalled'
-            WHERE end_ts IS NULL
-              AND status NOT IN ('stalled', 'aborted', 'failure', 'success')
+            WHERE status = 'pending'
               AND start_ts < ?
             """,
             (threshold_iso,),
@@ -338,13 +345,11 @@ class SQLiteStorageAdapter:
         parent_run_id FK is always satisfied when the child row is inserted.
         """
         try:
-            with self._conn:
+            with self._write_lock, self._conn:
                 self._conn.execute(
                     _INSERT_PENDING_RUN,
                     (run_id, kind.value, task_id, parent_run_id, _dt_to_iso(start_ts)),
                 )
-        except sqlite3.IntegrityError as exc:
-            raise StorageError(str(exc)) from exc
         except sqlite3.Error as exc:
             raise StorageError(str(exc)) from exc
 
@@ -368,7 +373,7 @@ class SQLiteStorageAdapter:
         """
         span_rows = [_span_to_row(s) for s in spans]
         try:
-            with self._conn:
+            with self._write_lock, self._conn:
                 self._conn.execute(
                     _FINALIZE_RUN,
                     (
@@ -385,8 +390,6 @@ class SQLiteStorageAdapter:
                 )
                 if span_rows:
                     self._conn.executemany(_INSERT_SPAN, span_rows)
-        except sqlite3.IntegrityError as exc:
-            raise StorageError(str(exc)) from exc
         except sqlite3.Error as exc:
             raise StorageError(str(exc)) from exc
 
@@ -394,28 +397,24 @@ class SQLiteStorageAdapter:
         run_row = _run_to_row(run)
         span_rows = [_span_to_row(s) for s in spans]
         try:
-            with self._conn:
+            with self._write_lock, self._conn:
                 self._conn.execute(_INSERT_RUN, run_row)
                 if span_rows:
                     self._conn.executemany(_INSERT_SPAN, span_rows)
-        except sqlite3.IntegrityError as exc:
-            raise StorageError(str(exc)) from exc
         except sqlite3.Error as exc:
             raise StorageError(str(exc)) from exc
 
     def write_score(self, score: Score) -> None:
         try:
-            self._conn.execute(_INSERT_SCORE, _score_to_row(score))
-        except sqlite3.IntegrityError as exc:
-            raise StorageError(str(exc)) from exc
+            with self._write_lock:
+                self._conn.execute(_INSERT_SCORE, _score_to_row(score))
         except sqlite3.Error as exc:
             raise StorageError(str(exc)) from exc
 
     def write_example(self, example: Example) -> None:
         try:
-            self._conn.execute(_INSERT_EXAMPLE, _example_to_row(example))
-        except sqlite3.IntegrityError as exc:
-            raise StorageError(str(exc)) from exc
+            with self._write_lock:
+                self._conn.execute(_INSERT_EXAMPLE, _example_to_row(example))
         except sqlite3.Error as exc:
             raise StorageError(str(exc)) from exc
 
@@ -460,7 +459,7 @@ class SQLiteStorageAdapter:
         params.append(limit)
 
         rows = self._conn.execute(
-            f"SELECT * FROM runs {where} ORDER BY start_ts DESC LIMIT ?",  # noqa: S608
+            f"SELECT * FROM runs {where} ORDER BY start_ts DESC LIMIT ?",  # noqa: S608 — clauses are static strings; all values bind via ?
             params,
         ).fetchall()
         return [_row_to_run(r) for r in rows]
@@ -498,7 +497,7 @@ class SQLiteStorageAdapter:
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
         rows = self._conn.execute(
-            f"SELECT * FROM examples {where}",  # noqa: S608
+            f"SELECT * FROM examples {where}",  # noqa: S608 — clauses are static strings; all values bind via ?
             params,
         ).fetchall()
         return [_row_to_example(r) for r in rows]

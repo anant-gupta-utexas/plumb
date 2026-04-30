@@ -282,6 +282,17 @@ def test_example_naive_created_at() -> None:
         _example(created_at=datetime(2024, 1, 1))
 
 
+def test_example_bad_origin_run_id() -> None:
+    with pytest.raises(ValidationError):
+        _example(origin_run_id="not-a-hex32")
+
+
+def test_example_origin_run_id_and_rubric_roundtrip() -> None:
+    e = _example(origin_run_id=_HEX32, rubric="Is the answer correct?")
+    assert e.origin_run_id == _HEX32
+    assert e.rubric == "Is the answer correct?"
+
+
 # ---------------------------------------------------------------------------
 # §9.2 — no user content in ValidationError messages (log injection prevention)
 # ---------------------------------------------------------------------------

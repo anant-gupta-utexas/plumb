@@ -259,4 +259,30 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ---
 
+### v2 — Span `tokens_in` / `tokens_out` column split
+
+- **Decision:** deferred to v2
+- **Date:** 2026-04-29
+- **Context:** The TRD §7.1 schema has a single `spans.tokens INTEGER` column. The `Span` entity carries both `tokens_in` and `tokens_out` fields, but on write only their sum is stored. On read, the sum is surfaced as `tokens_in`; `tokens_out` is always `None`. This is documented in the `Span` docstring and in `_row_to_span`. The user-visible API therefore silently loses the in/out split after a round-trip.
+- **Options considered:**
+  - *v1 entity collapse* — change `Span` to a single `tokens: int | None` field matching the schema. Loses the split at the call-site, which is ergonomically worse.
+  - *v1 DDL split* — add `tokens_in` + `tokens_out` columns; requires a schema migration (violates PRD §8 Tier-1 schema-stability gate).
+  - **v1 documentation + v2 schema change (chosen for v1)** — document the asymmetry clearly, keep both entity fields, and defer the DDL change. Code review finding I-1.
+- **Rationale for current pick:** No schema migration is acceptable in v1 (PRD §8 Tier-1). The sum is the only durably correct value the TRD defined; the split is informational at the entity layer.
+- **Revisit trigger:** Any consumer (CLI `run stats`, HTTP, judge slice) needs to distinguish input vs. output tokens. Requires a schema migration and a `user_version` bump.
+
+### v1.1 — WAL/SHM file permissions
+
+- **Decision:** deferred to v1.1
+- **Date:** 2026-04-29
+- **Context:** `SQLiteStorageAdapter.__init__` chmods the `.db` file to `0o600` after opening, but the WAL (`*.db-wal`) and SHM (`*.db-shm`) side-car files inherit the process umask (typically `0644`). On a multi-user system, a second local user can read the WAL and see payloads from transactions that have not yet been checkpointed. The paths are deterministic (`db_path + "-wal"`, `db_path + "-shm"`).
+- **Options considered:**
+  - *v1 inclusion* — chmod the wal/shm paths after `apply_pragmas` (they're created lazily, so a brief race exists, but it's narrow). Alternatively, set `O_NOFOLLOW` on open and chmod immediately.
+  - *Document-only* — note in `getting_started.md` that users should set `umask 077` if sharing a machine.
+  - **Deferred (chosen for v1)** — TRS §9.2 explicitly accepted this. Code review finding M-7.
+- **Rationale for current pick:** Single-user local posture; FileVault/LUKS/BitLocker is the right layer for shared-machine confidentiality.
+- **Revisit trigger:** First user report of WAL content leaking across accounts, OR plumb is used in a shared CI environment (multi-user Linux).
+
+---
+
 *End of backlog. Append new entries at the bottom of the appropriate group.*

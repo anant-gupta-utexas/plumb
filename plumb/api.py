@@ -58,7 +58,14 @@ class _DefaultIdGenerator:
 
 
 class _NoopStorageWriter:
-    """Used before a real writer is configured (e.g. during test isolation)."""
+    """Silently discards all writes.
+
+    This is the initial value of ``_storage_writer`` before
+    ``_init_storage_singletons`` runs.  Tests that inject a fake adapter
+    before any ``with run(...)`` call will never see this class — it only
+    survives if a test monkeypatches neither ``_storage`` nor
+    ``_storage_writer``, in which case all write calls are deliberate no-ops.
+    """
 
     def open_run(
         self,

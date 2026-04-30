@@ -129,6 +129,9 @@ class FakeBlobStore:
     def get(self, sha256_hex: str) -> bytes:
         return self._store[sha256_hex]
 
+    def exists(self, sha256_hex: str) -> bool:
+        return sha256_hex in self._store
+
 
 class FakeJudgeAdapter:
     name = "fake"
