@@ -51,7 +51,9 @@ def test_span_overhead_p95_within_budget(monkeypatch: pytest.MonkeyPatch) -> Non
     p95_ms = latencies_ns[int(N * 0.95)] / 1_000_000
     p99_ms = latencies_ns[int(N * 0.99)] / 1_000_000
 
-    print(f"\nadd_span latency (N={N:,}): p50={p50_ms:.3f}ms  p95={p95_ms:.3f}ms  p99={p99_ms:.3f}ms")
+    print(
+        f"\nadd_span latency (N={N:,}): p50={p50_ms:.3f}ms  p95={p95_ms:.3f}ms  p99={p99_ms:.3f}ms"
+    )
 
     assert p95_ms <= CI_BUDGET_MS, (
         f"p95 latency {p95_ms:.3f} ms exceeds CI budget of {CI_BUDGET_MS} ms"

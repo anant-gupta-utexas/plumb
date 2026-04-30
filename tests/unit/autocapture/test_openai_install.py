@@ -48,7 +48,7 @@ class TestTryInstallNoSdk:
 
         before = dict(state._INSTALLED)
         _try_install()
-        assert state._INSTALLED == before
+        assert before == state._INSTALLED
 
 
 # ---------------------------------------------------------------------------

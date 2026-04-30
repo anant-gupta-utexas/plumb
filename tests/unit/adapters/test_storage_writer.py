@@ -1,6 +1,5 @@
 """Tests for write_run, write_score, write_example (Tasks 3.2-3.4)."""
 
-import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -168,9 +167,7 @@ def test_write_score_label_only(tmp_path: Path) -> None:
             value_label="good",
         )
         adapter.write_score(score)
-        row = adapter._conn.execute(
-            "SELECT value_numeric, value_label FROM scores"
-        ).fetchone()
+        row = adapter._conn.execute("SELECT value_numeric, value_label FROM scores").fetchone()
         assert row[0] is None
         assert row[1] == "good"
 

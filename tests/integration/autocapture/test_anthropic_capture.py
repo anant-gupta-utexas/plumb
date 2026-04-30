@@ -10,14 +10,11 @@ Covers:
 
 from __future__ import annotations
 
-import hashlib
-
 import anthropic
 import httpx
 import pytest
 
 import plumb.api as _api
-import plumb.autocapture._state as _state
 from plumb.adapters.blobstore_fs import FilesystemBlobStore
 from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
 from plumb.autocapture._anthropic import _try_install
@@ -28,7 +25,6 @@ from .conftest import (
     _AsyncAnthropicTransport,
     _SyncAnthropicTransport,
 )
-
 
 # ---------------------------------------------------------------------------
 # Sync integration tests
@@ -148,7 +144,7 @@ class TestSyncAnthropicCapture:
             http_client=httpx.Client(transport=_SyncAnthropicTransport(CANNED_ANTHROPIC_MESSAGE)),
         )
 
-        with _api.run(task_id="return-type-test") as r:
+        with _api.run(task_id="return-type-test"):
             result = client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=100,
@@ -173,13 +169,12 @@ class TestSyncAnthropicCapture:
             ),
         )
 
-        with pytest.raises(anthropic.RateLimitError):
-            with _api.run(task_id="edge1-test") as r:
-                client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=100,
-                    messages=[{"role": "user", "content": "hi"}],
-                )
+        with pytest.raises(anthropic.RateLimitError), _api.run(task_id="edge1-test") as r:
+            client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "hi"}],
+            )
 
         spans = adapter.get_spans_for_run(r.run_id)
         assert len(spans) == 1
@@ -281,7 +276,7 @@ class TestAsyncAnthropicCapture:
             ),
         )
 
-        with _api.run(task_id="async-return-type") as r:
+        with _api.run(task_id="async-return-type"):
             result = await client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=100,
@@ -307,13 +302,12 @@ class TestAsyncAnthropicCapture:
             ),
         )
 
-        with pytest.raises(anthropic.RateLimitError):
-            with _api.run(task_id="async-edge1") as r:
-                await client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=100,
-                    messages=[{"role": "user", "content": "hi"}],
-                )
+        with pytest.raises(anthropic.RateLimitError), _api.run(task_id="async-edge1") as r:
+            await client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "hi"}],
+            )
 
         spans = adapter.get_spans_for_run(r.run_id)
         assert len(spans) == 1

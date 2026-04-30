@@ -122,6 +122,7 @@ class FakeBlobStore:
 
     def put(self, content: bytes) -> str:
         import hashlib
+
         key = hashlib.sha256(content).hexdigest()
         self._store[key] = content
         return key

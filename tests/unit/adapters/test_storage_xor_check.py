@@ -6,11 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
-from plumb.adapters._schema import DDL_STATEMENTS
 from plumb.adapters._pragmas import apply_pragmas
+from plumb.adapters._schema import DDL_STATEMENTS
+from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
 from plumb.core.errors import StorageError
-
 
 _NOW = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
 
@@ -43,7 +42,16 @@ def test_sql_xor_check_rejects_both_values(tmp_path: Path) -> None:
                 score_id, run_id, metric_name, scorer, scorer_version,
                 value_numeric, value_label, scored_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("c" * 32, "a" * 32, "acc", "deterministic", "v1", 0.9, "bad", "2026-01-01T12:00:00+00:00"),
+            (
+                "c" * 32,
+                "a" * 32,
+                "acc",
+                "deterministic",
+                "v1",
+                0.9,
+                "bad",
+                "2026-01-01T12:00:00+00:00",
+            ),
         )
     conn.close()
 
@@ -56,7 +64,16 @@ def test_sql_xor_check_rejects_neither_value(tmp_path: Path) -> None:
                 score_id, run_id, metric_name, scorer, scorer_version,
                 value_numeric, value_label, scored_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("c" * 32, "a" * 32, "acc", "deterministic", "v1", None, None, "2026-01-01T12:00:00+00:00"),
+            (
+                "c" * 32,
+                "a" * 32,
+                "acc",
+                "deterministic",
+                "v1",
+                None,
+                None,
+                "2026-01-01T12:00:00+00:00",
+            ),
         )
     conn.close()
 
@@ -82,7 +99,16 @@ def test_sql_xor_check_accepts_label_only(tmp_path: Path) -> None:
             score_id, run_id, metric_name, scorer, scorer_version,
             value_numeric, value_label, scored_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        ("c" * 32, "a" * 32, "acc", "deterministic", "v1", None, "good", "2026-01-01T12:00:00+00:00"),
+        (
+            "c" * 32,
+            "a" * 32,
+            "acc",
+            "deterministic",
+            "v1",
+            None,
+            "good",
+            "2026-01-01T12:00:00+00:00",
+        ),
     )
     count = conn.execute("SELECT COUNT(*) FROM scores").fetchone()[0]
     assert count == 1
@@ -93,6 +119,7 @@ def test_write_score_fk_violation_raises_storage_error(tmp_path: Path) -> None:
     """Score with nonexistent run_id raises StorageError (FK enforcement)."""
     with SQLiteStorageAdapter(tmp_path / "test.db", clock=_FixedClock()) as adapter:
         from plumb.core.entities import Score, ScorerKind
+
         score = Score(
             score_id="c" * 32,
             run_id="b" * 32,  # nonexistent

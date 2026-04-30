@@ -1,17 +1,15 @@
 """Tests for plumb/core/entities.py — enum values, invariants, and property tests."""
 
 import dataclasses
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from hypothesis import given, settings
-from hypothesis import strategies as st
+from hypothesis import given, settings, strategies as st
 
 from plumb.core.entities import (
     Example,
     ExampleSource,
     JudgeResult,
-    McNemarResult,
     Run,
     RunKind,
     RunStatus,
@@ -367,12 +365,8 @@ def test_judge_result_neither_raises() -> None:
 # ---------------------------------------------------------------------------
 
 
-_hex32_st = st.text(
-    alphabet="0123456789abcdef", min_size=32, max_size=32
-)
-_hex64_st = st.text(
-    alphabet="0123456789abcdef", min_size=64, max_size=64
-)
+_hex32_st = st.text(alphabet="0123456789abcdef", min_size=32, max_size=32)
+_hex64_st = st.text(alphabet="0123456789abcdef", min_size=64, max_size=64)
 _ts_st = st.datetimes(
     min_value=datetime(2000, 1, 1),
     max_value=datetime(2100, 1, 1),

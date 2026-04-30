@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import openai
 import httpx
+import openai
 import pytest
 
 import plumb.api as _api
@@ -94,12 +94,14 @@ class TestOpenAIChatCapture:
         _try_install()
         client = _sync_client(CANNED_OPENAI_RATE_LIMIT, status=429)
 
-        with pytest.raises(openai.RateLimitError):
-            with _api.run(task_id="openai-chat-rate-limit") as r:
-                client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[{"role": "user", "content": "hi"}],
-                )
+        with (
+            pytest.raises(openai.RateLimitError),
+            _api.run(task_id="openai-chat-rate-limit") as r,
+        ):
+            client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": "hi"}],
+            )
 
         spans = adapter.get_spans_for_run(r.run_id)
         assert len(spans) == 1

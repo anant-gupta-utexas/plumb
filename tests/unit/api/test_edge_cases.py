@@ -5,8 +5,7 @@ from __future__ import annotations
 import pytest
 
 from plumb.api import run
-from plumb.core.entities import RunStatus, SpanKind
-from plumb.core.errors import StorageError
+from plumb.core.entities import RunStatus
 
 
 class TestExceptionFlowEdgeCases:
@@ -19,9 +18,8 @@ class TestExceptionFlowEdgeCases:
         class _CustomErr(RuntimeError):
             pass
 
-        with pytest.raises(_CustomErr):
-            with run(task_id="t"):
-                raise _CustomErr("oops")
+        with pytest.raises(_CustomErr), run(task_id="t"):
+            raise _CustomErr("oops")
 
         assert storage.last_run.error_type == "_CustomErr"
 
@@ -32,17 +30,14 @@ class TestExceptionFlowEdgeCases:
         storage = configured_api  # type: ignore[assignment]
         assert isinstance(storage, FakeStorageWriter)
 
-        with pytest.raises(KeyboardInterrupt):
-            with run(task_id="t"):
-                raise KeyboardInterrupt
+        with pytest.raises(KeyboardInterrupt), run(task_id="t"):
+            raise KeyboardInterrupt
 
         assert len(storage.runs) == 1
         assert storage.last_run.status == RunStatus.FAILURE
         assert storage.last_run.error_type == "KeyboardInterrupt"
 
-    def test_multiple_exceptions_only_first_recorded(
-        self, configured_api: object
-    ) -> None:
+    def test_multiple_exceptions_only_first_recorded(self, configured_api: object) -> None:
         from tests.conftest import FakeStorageWriter
 
         storage = configured_api  # type: ignore[assignment]
@@ -51,10 +46,9 @@ class TestExceptionFlowEdgeCases:
         class _Err(Exception):
             pass
 
-        with pytest.raises(_Err):
-            with run(task_id="t") as r:
-                r.abort("pre-abort")
-                raise _Err("after abort")
+        with pytest.raises(_Err), run(task_id="t") as r:
+            r.abort("pre-abort")
+            raise _Err("after abort")
 
         # exception takes priority over abort when determining status
         assert storage.last_run.status == RunStatus.FAILURE

@@ -77,7 +77,7 @@ async def test_concurrent_runs_no_cross_pollution(
     assert len(set(run_ids)) == 3, "Each concurrent run must have a distinct run_id"
 
     # Each run has exactly 2 spans
-    for run_id, span_ids in zip(run_ids, span_id_sets):
+    for run_id, span_ids in zip(run_ids, span_id_sets, strict=True):
         assert len(span_ids) == 2, f"Run {run_id} should have exactly 2 spans, got {len(span_ids)}"
 
     # All span IDs are globally unique
@@ -85,7 +85,7 @@ async def test_concurrent_runs_no_cross_pollution(
     assert len(set(all_span_ids)) == 6, "All 6 span IDs must be distinct"
 
     # Each span belongs to the correct run (no cross-pollution)
-    for run_id, span_ids in zip(run_ids, span_id_sets):
+    for run_id, span_ids in zip(run_ids, span_id_sets, strict=True):
         spans = adapter.get_spans_for_run(run_id)
         db_span_ids = {s.span_id for s in spans}
         for sid in span_ids:

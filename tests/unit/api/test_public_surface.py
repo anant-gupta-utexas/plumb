@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 
@@ -54,8 +53,11 @@ class TestPublicSurface:
     def test_no_eager_heavy_imports(self) -> None:
         """Cold-import must not pull in heavy optional libraries."""
         result = subprocess.run(
-            [sys.executable, "-c",
-             "import plumb; import sys; print('\\n'.join(sys.modules.keys()))"],
+            [
+                sys.executable,
+                "-c",
+                "import plumb; import sys; print('\\n'.join(sys.modules.keys()))",
+            ],
             capture_output=True,
             text=True,
             check=True,
@@ -64,14 +66,15 @@ class TestPublicSurface:
         forbidden = {"anthropic", "openai", "httpx", "fastapi", "uvicorn", "typer"}
         for mod in loaded:
             root = mod.split(".")[0]
-            assert root not in forbidden, (
-                f"plumb eagerly imported forbidden module: {root!r}"
-            )
+            assert root not in forbidden, f"plumb eagerly imported forbidden module: {root!r}"
 
     def test_sqlite3_not_eagerly_imported(self) -> None:
         result = subprocess.run(
-            [sys.executable, "-c",
-             "import plumb; import sys; print('\\n'.join(sys.modules.keys()))"],
+            [
+                sys.executable,
+                "-c",
+                "import plumb; import sys; print('\\n'.join(sys.modules.keys()))",
+            ],
             capture_output=True,
             text=True,
             check=True,
