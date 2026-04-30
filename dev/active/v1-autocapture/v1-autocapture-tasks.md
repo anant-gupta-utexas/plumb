@@ -2,7 +2,7 @@
 
 **Companion to:** [`v1-autocapture-plan.md`](./v1-autocapture-plan.md) and [`v1-autocapture-context.md`](./v1-autocapture-context.md)
 **Owner:** anant
-**Last updated:** 2026-04-29
+**Last updated:** 2026-04-29 (Phase 3 + 4 complete)
 
 This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M = 1–4 hr, L = 4–8 hr, XL = > 8 hr), the files it touches, acceptance criteria, dependencies on other tasks, and testing requirements. Phases are sequential top-to-bottom; within a phase, tasks run in declared order unless flagged parallel.
 
@@ -11,7 +11,7 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 ## Pre-flight
 
 - [x] **v1-storage-adapter slice MERGED.** (archived at `dev/archive/v1-storage-adapter/`) — BlobStore + StorageWriter singletons and `_init_storage_singletons()` are available.
-- [ ] **anthropic + openai SDKs added to `[dependency-groups].dev` in `pyproject.toml`.** Required for integration tests; runtime soft-deps already declared.
+- [x] **anthropic + openai SDKs added to `[dependency-groups].dev` in `pyproject.toml`.** Required for integration tests; runtime soft-deps already declared.
 - [ ] **Working branch created:** `feat/v1-autocapture` from `main`.
 
 ---
@@ -139,13 +139,13 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** Two functions per the TRS §3.6 contract. Both wrap their entire body in `try/except BaseException`; on internal failure, log structured WARNING and return `None`. Use a local `from plumb.api import _active_run, _blobstore` to avoid circular imports.
 - **Acceptance Criteria:**
-    - [ ] `emit_success_span(provider="anthropic", endpoint="messages", model="claude-sonnet-4-6", request_payload=b'{"messages":[]}', response=<stub>, latency_ms=12.3)` calls `_FakeRunHandle.add_span` exactly once with the expected `Span` field shape.
-    - [ ] Sets `Span.kind = SpanKind.LLM`, `Span.name = "anthropic/messages/claude-sonnet-4-6"`, `Span.input_hash = sha256(request_payload).hexdigest()`, `Span.output_hash = sha256(canonical_response_bytes).hexdigest()`.
-    - [ ] Pulls `tokens_in` / `tokens_out` from `response.usage` (anthropic: `input_tokens`/`output_tokens`; openai chat: `prompt_tokens`/`completion_tokens`; openai responses: `input_tokens`/`output_tokens`).
-    - [ ] If `_active_run.get()` is `None`, emits a single DEBUG log and returns without calling `add_span`.
-    - [ ] If `_blobstore.put` raises, span is STILL emitted with computed hashes; WARNING logged.
-    - [ ] If anything else internal raises (e.g., bad response shape), WARNING logged and function returns silently — caller (the patched wrapper) is NOT informed.
-    - [ ] `emit_failure_span` records `Span.status = SpanStatus.FAILURE`, `Span.error_type = <provided string>`, `output_hash = None`, `tokens = None`.
+    - [x] `emit_success_span(provider="anthropic", endpoint="messages", model="claude-sonnet-4-6", request_payload=b'{"messages":[]}', response=<stub>, latency_ms=12.3)` calls `_FakeRunHandle.add_span` exactly once with the expected `Span` field shape.
+    - [x] Sets `Span.kind = SpanKind.LLM`, `Span.name = "anthropic/messages/claude-sonnet-4-6"`, `Span.input_hash = sha256(request_payload).hexdigest()`, `Span.output_hash = sha256(canonical_response_bytes).hexdigest()`.
+    - [x] Pulls `tokens_in` / `tokens_out` from `response.usage` (anthropic: `input_tokens`/`output_tokens`; openai chat: `prompt_tokens`/`completion_tokens`; openai responses: `input_tokens`/`output_tokens`).
+    - [x] If `_active_run.get()` is `None`, emits a single DEBUG log and returns without calling `add_span`.
+    - [x] If `_blobstore.put` raises, span is STILL emitted with computed hashes; WARNING logged.
+    - [x] If anything else internal raises (e.g., bad response shape), WARNING logged and function returns silently — caller (the patched wrapper) is NOT informed.
+    - [x] `emit_failure_span` records `Span.status = SpanStatus.FAILURE`, `Span.error_type = <provided string>`, `output_hash = None`, `tokens = None`.
 - **Files to Create/Modify:**
     - `plumb/autocapture/_emit.py` — new
     - `tests/unit/autocapture/test_emit.py` — new (with `_FakeBlobStore` and `_FakeRunHandle` defined in module-local conftest)
@@ -156,8 +156,8 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** Add to `tests/unit/autocapture/conftest.py`. `_FakeBlobStore` exposes `put`/`get`/`exists` matching the `BlobStore` Protocol; tracks all puts in a `dict[str, bytes]` and a `put_call_count` int. `_FakeRunHandle` exposes `add_span` capturing args into `captured_spans: list[dict]`.
 - **Acceptance Criteria:**
-    - [ ] Both fakes type-check against `plumb.core.ports.BlobStore` and the `RunHandle` interface respectively.
-    - [ ] Fixture `installed_emit_fakes` monkeypatches `plumb.api._blobstore` and `plumb.api._active_run.set(_FakeRunHandle())`; cleans up in teardown.
+    - [x] Both fakes type-check against `plumb.core.ports.BlobStore` and the `RunHandle` interface respectively.
+    - [x] Fixture `installed_emit_fakes` monkeypatches `plumb.api._blobstore` and `plumb.api._active_run.set(_FakeRunHandle())`; cleans up in teardown.
 - **Files to Create/Modify:**
     - `tests/unit/autocapture/conftest.py` — new
 - **Dependencies:** Task 3.1 (uses these in tests)
@@ -179,10 +179,10 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** Per TRS §3.4. `_try_install()` does `try: import anthropic; except ModuleNotFoundError: return`, resolves the two target classes (`Messages`, `AsyncMessages`), wraps each `.create` method, registers in `_state._INSTALLED`. Sync wrapper per TRS §3.4.2.
 - **Acceptance Criteria:**
-    - [ ] `_try_install()` no-ops if `anthropic` not installed.
-    - [ ] After `_try_install()`, `_state._INSTALLED` contains keys `"anthropic.resources.messages.Messages.create"` and `"anthropic.resources.messages.AsyncMessages.create"`.
-    - [ ] Idempotent: second `_try_install()` does not double-wrap.
-    - [ ] If `anthropic` installed but the qualname has moved, WARNING logged and the missing target is skipped.
+    - [x] `_try_install()` no-ops if `anthropic` not installed.
+    - [x] After `_try_install()`, `_state._INSTALLED` contains keys `"anthropic.resources.messages.Messages.create"` and `"anthropic.resources.messages.AsyncMessages.create"`.
+    - [x] Idempotent: second `_try_install()` does not double-wrap.
+    - [x] If `anthropic` installed but the qualname has moved, WARNING logged and the missing target is skipped.
 - **Files to Create/Modify:**
     - `plumb/autocapture/_anthropic.py` — new
     - `tests/unit/autocapture/test_anthropic_install.py` — new
@@ -198,10 +198,10 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
     - Assert two blob files exist.
     - Async variant: same but `AsyncAnthropic` and `await client.messages.create(...)`.
 - **Acceptance Criteria:**
-    - [ ] Sync integration test passes against real anthropic SDK (>= 0.40) with a custom transport returning a canned `MessageResponse`.
-    - [ ] Async integration test passes.
-    - [ ] FR-CAP-3 verified: assert `client.messages.create` return type is unchanged (an `anthropic.types.Message` instance).
-    - [ ] FR-EDGE-1 verified: a transport that raises `anthropic.RateLimitError` results in (a) the exception propagating to user code unchanged, (b) one `spans` row with `status='failure'`, `error_type='RateLimitError'`.
+    - [x] Sync integration test passes against real anthropic SDK (>= 0.40) with a custom transport returning a canned `MessageResponse`.
+    - [x] Async integration test passes.
+    - [x] FR-CAP-3 verified: assert `client.messages.create` return type is unchanged (an `anthropic.types.Message` instance).
+    - [x] FR-EDGE-1 verified: a transport that raises `anthropic.RateLimitError` results in (a) the exception propagating to user code unchanged, (b) one `spans` row with `status='failure'`, `error_type='RateLimitError'`.
 - **Files to Create/Modify:**
     - `plumb/autocapture/_anthropic.py` — extend (async)
     - `tests/integration/autocapture/test_anthropic_capture.py` — new
@@ -212,9 +212,9 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** Spawn 3 nested `@run`-wrapped async functions via `asyncio.gather`; each makes 2 anthropic calls. Assert 6 `spans` rows + 3 `runs` rows + correct `parent_run_id` chains.
 - **Acceptance Criteria:**
-    - [ ] `asyncio.gather` of 3 nested runs produces 3 distinct `runs` rows with no `parent_run_id` cross-pollution.
-    - [ ] Each run has 2 `spans` rows tied to its own `run_id`.
-    - [ ] Test runs in < 2 seconds.
+    - [x] `asyncio.gather` of 3 nested runs produces 3 distinct `runs` rows with no `parent_run_id` cross-pollution.
+    - [x] Each run has 2 `spans` rows tied to its own `run_id`.
+    - [x] Test runs in < 2 seconds.
 - **Files to Create/Modify:**
     - `tests/integration/autocapture/test_async_capture.py` — new (covers both anthropic + openai in Phase 5)
 - **Dependencies:** Task 4.2
