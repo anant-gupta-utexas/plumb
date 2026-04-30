@@ -1,8 +1,11 @@
 # TRS — `plumb/autocapture/` (v1 Autocapture Slice)
 
-**Status:** Draft v1 — derived from [TRD](../../../docs/2_architecture/TRD.md) and [SDD](../../../docs/2_architecture/SYSTEM_DESIGN.md), follows [v1 Core+API TRS](../../archive/v1-core-and-api/v1-core-and-api-plan.md) and [v1 Storage Adapter TRS](../../archive/v1-storage-adapter/v1-storage-adapter-plan.md)
+> **ARCHIVED** — 2026-04-30 · commit `978318a`. All 8 phases shipped; code review
+> findings applied; 500 tests pass; slice moved to `dev/archive/v1-autocapture/`.
+
+**Status:** Complete — all phases implemented, code-reviewed, and merged.
 **Owner:** anant
-**Last updated:** 2026-04-26
+**Last updated:** 2026-04-30
 **Scope:** The third component slice of plumb v1: import-time monkey-patching of the `anthropic` and `openai` SDKs to auto-emit `kind='llm'` spans into the active `RunHandle`. Replaces manual `r.add_span(...)` calls for the two LLM SDKs FR-CAP-1 names.
 
 > **What this is.** A Technical Requirements Specification (TRS) translating TRD-level FR-CAP and NFR-Rel/Perf IDs into module-level patch installers, span-emission contracts, and acceptance tests for the autocapture layer. Implementation phases (with task-level effort, files, and AC checklists) are in [`v1-autocapture-tasks.md`](./v1-autocapture-tasks.md); design rationale and resolved decisions are in [`v1-autocapture-context.md`](./v1-autocapture-context.md).
@@ -70,7 +73,9 @@ Import-time monkey-patch installers that emit `kind='llm'` spans into the active
 
 ### 2.2 NFRs in scope
 
-- **NFR-Perf-1 (MUST).** p95 added overhead per captured LLM span ≤ 1 ms over 10,000 stub calls (real SDK latency stripped via mock client).
+- **NFR-Perf-1 (MUST, bifurcated).** Two CI-blocking gates measure the captured-span hot path:
+  - **Strict (wrapper-only):** p95 added overhead ≤ 1 ms over 10,000 stub calls when the blob store is stubbed out — i.e. canonicalize + sha256 + `RunHandle.add_span`. This is the TRD §4.1 "no-op spans" budget and the contract instrumentation users observe.
+  - **Moderate (full path):** p95 added overhead ≤ 5 ms locally / 8 ms on CI when the real `FilesystemBlobStore` is in the path. Two `os.fsync` calls per captured span structurally exceed the strict 1 ms budget on real disks (~2 ms p95 measured on Apple M-series APFS). This matches the TRD §11 risk row "Hot-path overhead exceeds NFR-Perf-1 budget — fallback to moderate budget (5 ms)". A future redesign deferring blob writes to run-close batches (mirroring the spans-row flush) would let us tighten this back toward the strict 1 ms.
 - **NFR-Perf-5 (MUST).** Patch installers and emission helpers MUST NOT initiate network I/O. Verified by import-graph + mock-failure tests.
 - **NFR-Perf-6 (MUST).** `import plumb` does NOT eager-import `anthropic` or `openai` (verified by re-running the cold-import test from the core slice with autocapture enabled in env).
 - **NFR-Rel-1 (MUST).** Patch-side failure (entity validation, blob-store write failure, contextvars miss) NEVER raises into caller. WARNING log + skip-the-span; the SDK call's own outcome reaches the caller unchanged.
@@ -455,7 +460,7 @@ Verified by re-running the storage slice's `tests/perf/test_cold_import.py` with
 | User calls patched SDK outside any open run | Passthrough — original SDK behavior, no span emitted |
 | SDK raises `RateLimitError` mid-call | Span recorded with `status='failure'`, `error_type='RateLimitError'`; original exception re-raised unchanged (FR-EDGE-1) |
 | User calls SDK inside a run, then `r.abort()` then more SDK calls | After abort, `RunHandle.add_span` is a no-op (per core slice spec); patched wrapper still runs the SDK call normally — only span buffering is suppressed |
-| SDK call returns a streaming response (`stream=True`) | Span emitted with `output_hash` of the *request*, `tokens=None`, `error_type='unsupported_stream_capture'`, `status='success'`; user's stream still works because we returned the response unchanged. (Streaming spans deferred per §1.2.) |
+| SDK call returns a streaming response (`stream=True`, `messages.stream(...)`, etc.) | Span emitted with `output_hash=None`, `tokens=None`, `error_type='unsupported_stream_capture'`, `status='success'`; only the request payload's hash + blob are recorded; user's stream still works because we returned the response unchanged. (Streaming spans deferred per §1.2; full-content capture lands in `v1-streaming-autocapture/`.) |
 | Blob store `put` fails (disk full) | Span still buffered with computed `input_hash`/`output_hash`; WARNING logged; on run close the storage writer persists the span row; the blob content is missing — `BlobStore.get` later raises `BlobNotFoundError` for that hash, which downstream metric code handles |
 | `_active_run.get()` returns a handle whose run was closed in another thread | Possible only via misuse; `add_span` on a closed handle no-ops in the core slice; defensive — emit attempts the call, swallows on `PlumbError` |
 | User installs `anthropic` mid-process via `pip install` then re-imports | `install()` not re-invoked automatically; user must call `plumb.autocapture_install()` to pick it up. Documented behavior |
@@ -588,12 +593,13 @@ Slice-wide: **≥ 90%** (project gate is 75%; autocapture is testable end-to-end
 | Operation | Budget | Strategy |
 |---|---|---|
 | Patched wrapper overhead (no run open) | ≤ 5 µs | Single contextvar read + bool check, no allocations |
-| Patched wrapper overhead (run open, success path) | ≤ 1 ms | Two `canonicalize_*` calls + sha256 (small payloads) + 1–2 `BlobStore.put` + `add_span` |
+| Patched wrapper overhead (run open, success path, **wrapper-only**) | ≤ 1 ms | Two `canonicalize_*` calls + sha256 + `add_span`; blob writes excluded — strict NFR-Perf-1 |
+| Patched wrapper overhead (run open, success path, **with real blob store**) | ≤ 5 ms locally / 8 ms CI | Adds 1–2 `FilesystemBlobStore.put` (each ≈ 1 ms p95 due to fsync) — moderate budget |
 | `canonicalize_*` for typical 4-message Anthropic request (~2 KB) | ≤ 200 µs | `json.dumps(sort_keys=True)` is C-implemented; no recursion overhead |
 | `sha256` for 2 KB | ≤ 50 µs | OpenSSL-backed; trivial |
-| `BlobStore.put` for 2 KB | ≤ 500 µs | One `O_CREAT|O_EXCL` + write + fsync; storage slice's measured budget |
+| `BlobStore.put` for 2 KB | ≤ 500 µs target / ~1 ms p95 measured | One `O_CREAT|O_EXCL` + write + fsync; APFS fsync dominates on Apple silicon |
 
-The 1 ms NFR-Perf-1 budget is per-span overhead ON TOP OF the SDK call. Real SDK calls are 100 ms – 30 s, so 1 ms is invisible.
+Both budgets are per-span overhead ON TOP OF the SDK call. Real SDK calls are 100 ms – 30 s, so even the moderate 5 ms is invisible. Two CI gates enforce both numbers — see `tests/perf/test_autocapture_overhead.py`.
 
 ### 11.2 Memory
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from plumb.autocapture._state import _INSTALL_LOCK, _INSTALLED
+from plumb.autocapture._state import _INSTALL_LOCK, _INSTALLED, _unregister
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,10 @@ def install() -> None:
 def uninstall() -> None:
     """Restore all patched SDK methods to their originals. Idempotent. Thread-safe."""
     with _INSTALL_LOCK:
-        for key, patch in list(_INSTALLED.items()):
+        for key in list(_INSTALLED.keys()):
+            patch = _unregister(key)
+            if patch is None:
+                continue
             try:
                 import importlib
 
@@ -66,7 +69,6 @@ def uninstall() -> None:
                         "error_class": type(exc).__name__,
                     },
                 )
-            del _INSTALLED[key]
 
 
 def is_installed() -> bool:

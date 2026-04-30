@@ -58,7 +58,6 @@ class TestTryInstallNoSdk:
 
 class TestSyncWrapper:
     _REQ_CANON = "canonicalize_openai_chat_request"
-    _RESP_CANON = "canonicalize_openai_chat_response"
 
     def _make_wrapper(self, side_effect: Any = None) -> tuple[Any, list]:
         calls: list[dict] = []
@@ -70,7 +69,7 @@ class TestSyncWrapper:
             return types.SimpleNamespace(model="gpt-4o")
 
         return (
-            _wrap_sync(original, "chat", self._REQ_CANON, self._RESP_CANON),
+            _wrap_sync(original, "chat", self._REQ_CANON),
             calls,
         )
 
@@ -117,7 +116,6 @@ class TestSyncWrapper:
 
 class TestSyncWrapperResponses:
     _REQ_CANON = "canonicalize_openai_responses_request"
-    _RESP_CANON = "canonicalize_openai_responses_response"
 
     def test_span_name_includes_responses(self, installed_emit_fakes: Any) -> None:
         bs, rh = installed_emit_fakes
@@ -128,7 +126,7 @@ class TestSyncWrapperResponses:
         def orig(self_: Any, *args: Any, **kwargs: Any) -> Any:
             return types.SimpleNamespace(model="gpt-4o")
 
-        wrapper = _wrap_sync(orig, "responses", self._REQ_CANON, self._RESP_CANON)
+        wrapper = _wrap_sync(orig, "responses", self._REQ_CANON)
         wrapper(None, model="gpt-4o", input="hi")
         assert rh.captured_spans[0]["name"] == "openai/responses/gpt-4o"
 
@@ -140,7 +138,6 @@ class TestSyncWrapperResponses:
 
 class TestAsyncWrapper:
     _REQ_CANON = "canonicalize_openai_chat_request"
-    _RESP_CANON = "canonicalize_openai_chat_response"
 
     def _make_async_wrapper(self, side_effect: Any = None) -> tuple[Any, list]:
         calls: list[dict] = []
@@ -152,7 +149,7 @@ class TestAsyncWrapper:
             return types.SimpleNamespace(model="gpt-4o")
 
         return (
-            _wrap_async(original, "chat", self._REQ_CANON, self._RESP_CANON),
+            _wrap_async(original, "chat", self._REQ_CANON),
             calls,
         )
 

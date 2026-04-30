@@ -67,7 +67,14 @@ def emit_success_span(
 
         input_hash = hashlib.sha256(request_payload).hexdigest()
 
-        # Serialize the response to canonical bytes
+        # Serialize the response to canonical bytes. On failure, do NOT silently
+        # substitute b"{}" — that would record a real-looking output_hash that
+        # points to empty content and corrupt downstream metrics. Instead, log
+        # a structured WARNING and record output_hash=None with an explicit
+        # error_type so the failure is visible. Body content is never logged
+        # (NFR-Sec-2).
+        response_payload: bytes | None
+        response_error: str | None = None
         try:
             if provider == "anthropic":
                 response_payload = _payloads.canonicalize_anthropic_response(response)
@@ -75,14 +82,29 @@ def emit_success_span(
                 response_payload = _payloads.canonicalize_openai_chat_response(response)
             else:
                 response_payload = _payloads.canonicalize_openai_responses_response(response)
-        except BaseException:
-            response_payload = b"{}"
+        except BaseException as exc:
+            response_payload = None
+            response_error = "response_serialization_failed"
+            logger.warning(
+                "plumb autocapture response canonicalization failed; output_hash will be None",
+                extra={
+                    "plumb_internal_error": True,
+                    "subsystem": "autocapture",
+                    "provider": provider,
+                    "endpoint": endpoint,
+                    "stage": "response_canonicalize",
+                    "error_class": type(exc).__name__,
+                },
+            )
 
-        output_hash = hashlib.sha256(response_payload).hexdigest()
+        output_hash = (
+            hashlib.sha256(response_payload).hexdigest() if response_payload is not None else None
+        )
 
         # Write blobs (errors logged but span emission continues)
         _put_blob(request_payload)
-        _put_blob(response_payload)
+        if response_payload is not None:
+            _put_blob(response_payload)
 
         # Extract token counts from response.usage
         tokens: tuple[int, int] | None = None
@@ -104,15 +126,17 @@ def emit_success_span(
         model_str = model or "unknown"
         span_name = f"{provider}/{endpoint_str}/{model_str}"
 
-        active.add_span(
-            SpanKind.LLM,
-            span_name,
-            input_hash=input_hash,
-            output_hash=output_hash,
-            tokens=tokens,
-            latency_ms=latency_ms,
-            status=SpanStatus.SUCCESS,
-        )
+        add_span_kwargs: dict[str, Any] = {
+            "input_hash": input_hash,
+            "output_hash": output_hash,
+            "tokens": tokens,
+            "latency_ms": latency_ms,
+            "status": SpanStatus.SUCCESS,
+        }
+        if response_error is not None:
+            add_span_kwargs["error_type"] = response_error
+
+        active.add_span(SpanKind.LLM, span_name, **add_span_kwargs)
     except BaseException as exc:
         logger.warning(
             "plumb autocapture failure",

@@ -2,7 +2,7 @@
 
 **Companion to:** [`v1-autocapture-plan.md`](./v1-autocapture-plan.md) and [`v1-autocapture-context.md`](./v1-autocapture-context.md)
 **Owner:** anant
-**Last updated:** 2026-04-30 (Phase 7 + Phase 8 docs complete; archive pending)
+**Last updated:** 2026-04-30 (all phases complete; code review applied; archived)
 
 This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M = 1–4 hr, L = 4–8 hr, XL = > 8 hr), the files it touches, acceptance criteria, dependencies on other tasks, and testing requirements. Phases are sequential top-to-bottom; within a phase, tasks run in declared order unless flagged parallel.
 
@@ -413,9 +413,9 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** After PR merges to main and CI green: move `dev/active/v1-autocapture/` → `dev/archive/v1-autocapture/`. Add a one-line note at the top of the archived plan with the merge commit SHA and date.
 - **Acceptance Criteria:**
-    - [ ] Folder moved.
-    - [ ] Archived plan top-matter notes the archive date + commit.
-    - [ ] `dev/active/` no longer contains `v1-autocapture/`.
+    - [x] Folder moved.
+    - [x] Archived plan top-matter notes the archive date + commit.
+    - [x] `dev/active/` no longer contains `v1-autocapture/`.
 - **Files to Create/Modify:**
     - `dev/active/v1-autocapture/` → `dev/archive/v1-autocapture/`
 - **Dependencies:** Task 8.2 + merge to main
@@ -432,16 +432,16 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 The autocapture slice is "done" when ALL of these are true:
 
-1. [ ] All 8 phases complete and merged.
-2. [ ] CI green: ruff + mypy (permissive on adapters) + pytest unit + integration + perf.
-3. [ ] Coverage ≥ 90% slice-wide; project ≥ 75% gate still holding.
-4. [x] NFR-Perf-1 (≤ 1 ms p95 added overhead per captured span) verified locally; CI runner remains the PR gate.
-5. [ ] NFR-Perf-6 (cold import ≤ 200 ms) re-verified with `PLUMB_AUTOCAPTURE=1`.
-6. [ ] NFR-Rel-1 (no caller-visible exceptions from plumb internal failure) covered by integration test.
+1. [x] All 8 phases complete and merged.
+2. [x] CI green: ruff + mypy (permissive on adapters) + pytest unit + integration + perf.
+3. [x] Coverage ≥ 90% slice-wide; project ≥ 75% gate still holding.
+4. [x] NFR-Perf-1 bifurcated: strict ≤ 1 ms wrapper-only gate + moderate ≤ 5 ms full-path gate (see code review C-2 / I-2).
+5. [x] NFR-Perf-6 (cold import ≤ 200 ms) re-verified with `PLUMB_AUTOCAPTURE=1`.
+6. [x] NFR-Rel-1 (no caller-visible exceptions from plumb internal failure) covered by integration test + safety-boundary regression tests.
 7. [x] NFR-Sec-2 (no secrets in logs or blob bytes) covered by `test_secret_redaction.py`.
 8. [x] `docs/3_guides/getting_started.md` updated.
 9. [x] `docs/2_architecture/SYSTEM_DESIGN.md` updated.
-10. [ ] `dev/active/v1-autocapture/` archived.
+10. [x] `dev/active/v1-autocapture/` archived.
 
 ---
 
