@@ -75,9 +75,7 @@ class TestAsyncEdgeCases:
         assert storage.last_run.status == RunStatus.SUCCESS
         assert storage.last_spans == []
 
-    async def test_fr_edge_5_abort_status_and_partial_flush(
-        self, configured_api: object
-    ) -> None:
+    async def test_fr_edge_5_abort_status_and_partial_flush(self, configured_api: object) -> None:
         """FR-EDGE-5 async: abort writes pre-abort spans; post-abort spans not persisted."""
         from tests.conftest import FakeStorageWriter
 
@@ -151,7 +149,7 @@ class TestAsyncNFRRel1:
 
         result = None
         with caplog.at_level(logging.WARNING, logger="plumb.api"):
-            async with run(task_id="t") as r:
+            async with run(task_id="t"):
                 result = 42
 
         assert result == 42

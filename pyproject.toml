@@ -37,6 +37,9 @@ target-version = "py313"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = []
 
+[tool.ruff.lint.isort]
+combine-as-imports = true
+
 [tool.mypy]
 python_version = "3.13"
 strict = true

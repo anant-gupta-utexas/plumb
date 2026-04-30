@@ -11,7 +11,7 @@ import time
 from typing import Any
 
 from plumb.autocapture import _payloads
-from plumb.autocapture._state import _INSTALLED, _is_registered, _Patch
+from plumb.autocapture._state import _is_registered, _Patch, _register
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def _try_install() -> None:
 
     import importlib
 
-    for mod_path, cls_name, method_name, endpoint, req_canon, resp_canon in _TARGETS:
+    for mod_path, cls_name, method_name, endpoint, req_canon, _resp_canon in _TARGETS:
         key = f"{mod_path}.{cls_name}.{method_name}"
         if _is_registered(key):
             continue
@@ -63,19 +63,20 @@ def _try_install() -> None:
 
         is_async = cls_name.startswith("Async")
         if is_async:
-            wrapped = _wrap_async(original, endpoint, req_canon, resp_canon)
+            wrapped = _wrap_async(original, endpoint, req_canon)
         else:
-            wrapped = _wrap_sync(original, endpoint, req_canon, resp_canon)
+            wrapped = _wrap_sync(original, endpoint, req_canon)
 
-        setattr(cls, method_name, wrapped)
-        _INSTALLED[key] = _Patch(
+        patch = _Patch(
             target_module=mod_path,
             target_qualname=f"{cls_name}.{method_name}",
             original=original,
         )
+        if _register(patch):
+            setattr(cls, method_name, wrapped)
 
 
-def _wrap_sync(original: Any, endpoint: str, req_canon: str, resp_canon: str) -> Any:
+def _wrap_sync(original: Any, endpoint: str, req_canon: str) -> Any:
     @functools.wraps(original)
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
         from plumb.api import _active_run
@@ -85,21 +86,31 @@ def _wrap_sync(original: Any, endpoint: str, req_canon: str, resp_canon: str) ->
             return original(self, *args, **kwargs)
 
         start = time.perf_counter()
-        request_payload = getattr(_payloads, req_canon)(args, kwargs)
+        request_payload = _payloads.safe_canonicalize_request(
+            getattr(_payloads, req_canon),
+            args,
+            kwargs,
+            provider="openai",
+            endpoint=endpoint,
+        )
         try:
             response = original(self, *args, **kwargs)
         except BaseException as exc:
-            from plumb.autocapture import _emit
+            if request_payload is not _payloads.CANONICALIZATION_FAILED:
+                from plumb.autocapture import _emit
 
-            _emit.emit_failure_span(
-                provider="openai",
-                endpoint=endpoint,
-                model=kwargs.get("model"),
-                request_payload=request_payload,
-                latency_ms=(time.perf_counter() - start) * 1000,
-                error_type=type(exc).__name__,
-            )
+                _emit.emit_failure_span(
+                    provider="openai",
+                    endpoint=endpoint,
+                    model=kwargs.get("model"),
+                    request_payload=request_payload,
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    error_type=type(exc).__name__,
+                )
             raise
+
+        if request_payload is _payloads.CANONICALIZATION_FAILED:
+            return response
 
         from plumb.autocapture import _emit
 
@@ -126,7 +137,7 @@ def _wrap_sync(original: Any, endpoint: str, req_canon: str, resp_canon: str) ->
     return wrapper
 
 
-def _wrap_async(original: Any, endpoint: str, req_canon: str, resp_canon: str) -> Any:
+def _wrap_async(original: Any, endpoint: str, req_canon: str) -> Any:
     @functools.wraps(original)
     async def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
         from plumb.api import _active_run
@@ -136,21 +147,31 @@ def _wrap_async(original: Any, endpoint: str, req_canon: str, resp_canon: str) -
             return await original(self, *args, **kwargs)
 
         start = time.perf_counter()
-        request_payload = getattr(_payloads, req_canon)(args, kwargs)
+        request_payload = _payloads.safe_canonicalize_request(
+            getattr(_payloads, req_canon),
+            args,
+            kwargs,
+            provider="openai",
+            endpoint=endpoint,
+        )
         try:
             response = await original(self, *args, **kwargs)
         except BaseException as exc:
-            from plumb.autocapture import _emit
+            if request_payload is not _payloads.CANONICALIZATION_FAILED:
+                from plumb.autocapture import _emit
 
-            _emit.emit_failure_span(
-                provider="openai",
-                endpoint=endpoint,
-                model=kwargs.get("model"),
-                request_payload=request_payload,
-                latency_ms=(time.perf_counter() - start) * 1000,
-                error_type=type(exc).__name__,
-            )
+                _emit.emit_failure_span(
+                    provider="openai",
+                    endpoint=endpoint,
+                    model=kwargs.get("model"),
+                    request_payload=request_payload,
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    error_type=type(exc).__name__,
+                )
             raise
+
+        if request_payload is _payloads.CANONICALIZATION_FAILED:
+            return response
 
         from plumb.autocapture import _emit
 

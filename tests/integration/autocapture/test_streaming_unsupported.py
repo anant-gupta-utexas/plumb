@@ -105,13 +105,15 @@ def test_anthropic_stream_records_unsupported_marker_span(
         ),
     )
 
-    with _api.run(task_id="anthropic-stream") as r:
-        with client.messages.stream(
+    with (
+        _api.run(task_id="anthropic-stream") as r,
+        client.messages.stream(
             model="claude-sonnet-4-6",
             max_tokens=100,
             messages=[{"role": "user", "content": "hi"}],
-        ) as stream:
-            events = list(stream)
+        ) as stream,
+    ):
+        events = list(stream)
 
     assert events
     spans = adapter.get_spans_for_run(r.run_id)

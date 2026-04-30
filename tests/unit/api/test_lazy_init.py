@@ -51,9 +51,7 @@ def test_init_storage_singletons_noop_when_already_set(
     monkeypatch.setattr(_api, "_storage", fake_storage)
 
     # Patch the lazy imports so they would fail loudly if called
-    with patch.dict(
-        sys.modules, {"plumb.adapters.storage_sqlite": None}
-    ):  # type: ignore[dict-item]
+    with patch.dict(sys.modules, {"plumb.adapters.storage_sqlite": None}):  # type: ignore[dict-item]
         _api._init_storage_singletons()
 
     # _storage unchanged
@@ -153,6 +151,7 @@ def test_run_context_manager_triggers_init_once(
     _reset_singletons(monkeypatch)
 
     init_call_count = 0
+
     def counting_init() -> None:
         nonlocal init_call_count
         init_call_count += 1

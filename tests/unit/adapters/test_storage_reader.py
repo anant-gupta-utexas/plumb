@@ -1,7 +1,6 @@
 """Tests for StorageReader methods and private helpers (Phase 4 coverage)."""
 
-import sqlite3
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -78,7 +77,9 @@ def _make_run(run_id: str = "a" * 32, task_id: str = "task1") -> Run:
     )
 
 
-def _make_span(span_id: str, run_id: str = "a" * 32, *, with_tokens: bool = False, with_latency: bool = False) -> Span:
+def _make_span(
+    span_id: str, run_id: str = "a" * 32, *, with_tokens: bool = False, with_latency: bool = False
+) -> Span:
     return Span(
         span_id=span_id,
         run_id=run_id,
@@ -179,9 +180,11 @@ def test_list_runs_filter_by_since(tmp_path: Path) -> None:
 
 
 def test_list_runs_invalid_kind_raises(tmp_path: Path) -> None:
-    with SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter:
-        with pytest.raises(ValidationError, match="Invalid kind"):
-            adapter.list_runs(kind="bogus")
+    with (
+        SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter,
+        pytest.raises(ValidationError, match="Invalid kind"),
+    ):
+        adapter.list_runs(kind="bogus")
 
 
 def test_list_runs_respects_limit(tmp_path: Path) -> None:
@@ -508,7 +511,9 @@ def test_run_round_trip_enum_variants(
         status=run_status,
         start_ts=_NOW,
     )
-    with SQLiteStorageAdapter(tmp_path / f"test_{run_kind}_{run_status}.db", clock=_CLOCK) as adapter:
+    with SQLiteStorageAdapter(
+        tmp_path / f"test_{run_kind}_{run_status}.db", clock=_CLOCK
+    ) as adapter:
         adapter.write_run(run, [])
         result = adapter.get_run(run.run_id)
         assert result is not None
@@ -574,15 +579,33 @@ def test_list_runs_combined_filters(tmp_path: Path) -> None:
     base = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
     with SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter:
         adapter.write_run(
-            Run(run_id="a" * 32, task_id="T1", kind=RunKind.ONLINE, status=RunStatus.SUCCESS, start_ts=base),
+            Run(
+                run_id="a" * 32,
+                task_id="T1",
+                kind=RunKind.ONLINE,
+                status=RunStatus.SUCCESS,
+                start_ts=base,
+            ),
             [],
         )
         adapter.write_run(
-            Run(run_id="b" * 32, task_id="T1", kind=RunKind.OFFLINE, status=RunStatus.SUCCESS, start_ts=base),
+            Run(
+                run_id="b" * 32,
+                task_id="T1",
+                kind=RunKind.OFFLINE,
+                status=RunStatus.SUCCESS,
+                start_ts=base,
+            ),
             [],
         )
         adapter.write_run(
-            Run(run_id="c" * 32, task_id="T2", kind=RunKind.ONLINE, status=RunStatus.SUCCESS, start_ts=base),
+            Run(
+                run_id="c" * 32,
+                task_id="T2",
+                kind=RunKind.ONLINE,
+                status=RunStatus.SUCCESS,
+                start_ts=base,
+            ),
             [],
         )
         results = adapter.list_runs(task_id="T1", kind="online")
@@ -596,11 +619,23 @@ def test_list_runs_since_task_id_and_kind_combined(tmp_path: Path) -> None:
     later = base + timedelta(hours=1)
     with SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter:
         adapter.write_run(
-            Run(run_id="a" * 32, task_id="T1", kind=RunKind.ONLINE, status=RunStatus.SUCCESS, start_ts=base),
+            Run(
+                run_id="a" * 32,
+                task_id="T1",
+                kind=RunKind.ONLINE,
+                status=RunStatus.SUCCESS,
+                start_ts=base,
+            ),
             [],
         )
         adapter.write_run(
-            Run(run_id="b" * 32, task_id="T1", kind=RunKind.ONLINE, status=RunStatus.SUCCESS, start_ts=later),
+            Run(
+                run_id="b" * 32,
+                task_id="T1",
+                kind=RunKind.ONLINE,
+                status=RunStatus.SUCCESS,
+                start_ts=later,
+            ),
             [],
         )
         # Only the later run satisfies all three filters

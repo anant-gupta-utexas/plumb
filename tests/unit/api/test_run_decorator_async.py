@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import functools
-
 import pytest
 
-from plumb.api import RunHandle, run
+from plumb.api import run
 from plumb.core.entities import RunStatus, SpanKind
 
 
@@ -55,9 +53,7 @@ class TestAsyncDecoratorBasics:
         await _fn()
         assert storage.last_run.task_id == "async-eval"
 
-    async def test_exception_propagates_and_writes_failure(
-        self, configured_api: object
-    ) -> None:
+    async def test_exception_propagates_and_writes_failure(self, configured_api: object) -> None:
         from tests.conftest import FakeStorageWriter
 
         storage = configured_api  # type: ignore[assignment]
@@ -94,9 +90,7 @@ class TestAsyncDecoratorBasics:
         assert len(storage.last_spans) == 1
         assert storage.last_spans[0].name == "gen"
 
-    async def test_multiple_calls_write_multiple_rows(
-        self, configured_api: object
-    ) -> None:
+    async def test_multiple_calls_write_multiple_rows(self, configured_api: object) -> None:
         from tests.conftest import FakeStorageWriter
 
         storage = configured_api  # type: ignore[assignment]

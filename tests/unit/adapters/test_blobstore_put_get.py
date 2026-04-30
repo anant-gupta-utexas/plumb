@@ -1,13 +1,12 @@
 """Tests for FilesystemBlobStore.put / .get / .exists (Task 2.1)."""
 
 import hashlib
+from pathlib import Path
 
 import pytest
-from hypothesis import given, settings
-from hypothesis import strategies as st
+from hypothesis import given, settings, strategies as st
 
 from plumb.adapters.blobstore_fs import FilesystemBlobStore
-from pathlib import Path
 from plumb.core.errors import BlobNotFoundError, ValidationError
 
 
@@ -91,6 +90,7 @@ def test_exists_malformed_raises_validation_error(store) -> None:
 @settings(max_examples=100)
 def test_roundtrip_property(content: bytes) -> None:
     import tempfile
+
     with tempfile.TemporaryDirectory() as d:
         store = FilesystemBlobStore(Path(d) / "blobs")
         digest = store.put(content)

@@ -11,7 +11,7 @@ import time
 from typing import Any
 
 from plumb.autocapture import _payloads
-from plumb.autocapture._state import _INSTALLED, _is_registered, _Patch
+from plumb.autocapture._state import _is_registered, _Patch, _register
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +57,13 @@ def _try_install() -> None:
         else:
             wrapped = _wrap_messages_create(original)
 
-        setattr(cls, method_name, wrapped)
-        _INSTALLED[key] = _Patch(
+        patch = _Patch(
             target_module=_TARGET_MODULE,
             target_qualname=f"{cls_name}.{method_name}",
             original=original,
         )
+        if _register(patch):
+            setattr(cls, method_name, wrapped)
 
 
 def _wrap_messages_create(original: Any) -> Any:
@@ -75,21 +76,31 @@ def _wrap_messages_create(original: Any) -> Any:
             return original(self, *args, **kwargs)
 
         start = time.perf_counter()
-        request_payload = _payloads.canonicalize_anthropic_request(args, kwargs)
+        request_payload = _payloads.safe_canonicalize_request(
+            _payloads.canonicalize_anthropic_request,
+            args,
+            kwargs,
+            provider="anthropic",
+            endpoint="messages",
+        )
         try:
             response = original(self, *args, **kwargs)
         except BaseException as exc:
-            from plumb.autocapture import _emit
+            if request_payload is not _payloads.CANONICALIZATION_FAILED:
+                from plumb.autocapture import _emit
 
-            _emit.emit_failure_span(
-                provider="anthropic",
-                endpoint="messages",
-                model=kwargs.get("model"),
-                request_payload=request_payload,
-                latency_ms=(time.perf_counter() - start) * 1000,
-                error_type=type(exc).__name__,
-            )
+                _emit.emit_failure_span(
+                    provider="anthropic",
+                    endpoint="messages",
+                    model=kwargs.get("model"),
+                    request_payload=request_payload,
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    error_type=type(exc).__name__,
+                )
             raise
+
+        if request_payload is _payloads.CANONICALIZATION_FAILED:
+            return response
 
         from plumb.autocapture import _emit
 
@@ -116,21 +127,31 @@ def _wrap_messages_stream(original: Any) -> Any:
             return original(self, *args, **kwargs)
 
         start = time.perf_counter()
-        request_payload = _payloads.canonicalize_anthropic_request(args, kwargs)
+        request_payload = _payloads.safe_canonicalize_request(
+            _payloads.canonicalize_anthropic_request,
+            args,
+            kwargs,
+            provider="anthropic",
+            endpoint="messages",
+        )
         try:
             stream = original(self, *args, **kwargs)
         except BaseException as exc:
-            from plumb.autocapture import _emit
+            if request_payload is not _payloads.CANONICALIZATION_FAILED:
+                from plumb.autocapture import _emit
 
-            _emit.emit_failure_span(
-                provider="anthropic",
-                endpoint="messages",
-                model=kwargs.get("model"),
-                request_payload=request_payload,
-                latency_ms=(time.perf_counter() - start) * 1000,
-                error_type=type(exc).__name__,
-            )
+                _emit.emit_failure_span(
+                    provider="anthropic",
+                    endpoint="messages",
+                    model=kwargs.get("model"),
+                    request_payload=request_payload,
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    error_type=type(exc).__name__,
+                )
             raise
+
+        if request_payload is _payloads.CANONICALIZATION_FAILED:
+            return stream
 
         from plumb.autocapture import _emit
 
@@ -156,21 +177,31 @@ def _wrap_async_messages_create(original: Any) -> Any:
             return await original(self, *args, **kwargs)
 
         start = time.perf_counter()
-        request_payload = _payloads.canonicalize_anthropic_request(args, kwargs)
+        request_payload = _payloads.safe_canonicalize_request(
+            _payloads.canonicalize_anthropic_request,
+            args,
+            kwargs,
+            provider="anthropic",
+            endpoint="messages",
+        )
         try:
             response = await original(self, *args, **kwargs)
         except BaseException as exc:
-            from plumb.autocapture import _emit
+            if request_payload is not _payloads.CANONICALIZATION_FAILED:
+                from plumb.autocapture import _emit
 
-            _emit.emit_failure_span(
-                provider="anthropic",
-                endpoint="messages",
-                model=kwargs.get("model"),
-                request_payload=request_payload,
-                latency_ms=(time.perf_counter() - start) * 1000,
-                error_type=type(exc).__name__,
-            )
+                _emit.emit_failure_span(
+                    provider="anthropic",
+                    endpoint="messages",
+                    model=kwargs.get("model"),
+                    request_payload=request_payload,
+                    latency_ms=(time.perf_counter() - start) * 1000,
+                    error_type=type(exc).__name__,
+                )
             raise
+
+        if request_payload is _payloads.CANONICALIZATION_FAILED:
+            return response
 
         from plumb.autocapture import _emit
 

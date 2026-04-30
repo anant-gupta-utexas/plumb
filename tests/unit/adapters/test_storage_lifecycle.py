@@ -134,7 +134,9 @@ def test_stalled_sweep_marks_old_pending_run(tmp_path: Path) -> None:
     db = tmp_path / "test.db"
     _setup_db_with_pending_run(db, two_hours_ago)
 
-    with SQLiteStorageAdapter(db, clock=_FixedClock(now), stalled_threshold_seconds=3600) as adapter:  # noqa: E501
+    with SQLiteStorageAdapter(
+        db, clock=_FixedClock(now), stalled_threshold_seconds=3600
+    ) as adapter:  # noqa: E501
         row = adapter._conn.execute(
             "SELECT status FROM runs WHERE run_id = ?", ("a" * 32,)
         ).fetchone()
@@ -148,7 +150,9 @@ def test_stalled_sweep_does_not_mark_terminal_status_rows(tmp_path: Path) -> Non
     db = tmp_path / "test.db"
     _setup_db_with_terminal_run(db, two_hours_ago)
 
-    with SQLiteStorageAdapter(db, clock=_FixedClock(now), stalled_threshold_seconds=3600) as adapter:  # noqa: E501
+    with SQLiteStorageAdapter(
+        db, clock=_FixedClock(now), stalled_threshold_seconds=3600
+    ) as adapter:  # noqa: E501
         row = adapter._conn.execute(
             "SELECT status FROM runs WHERE run_id = ?", ("a" * 32,)
         ).fetchone()
@@ -163,7 +167,9 @@ def test_stalled_sweep_leaves_recent_pending_run_unchanged(tmp_path: Path) -> No
     db = tmp_path / "test.db"
     _setup_db_with_pending_run(db, thirty_min_ago)
 
-    with SQLiteStorageAdapter(db, clock=_FixedClock(now), stalled_threshold_seconds=3600) as adapter:  # noqa: E501
+    with SQLiteStorageAdapter(
+        db, clock=_FixedClock(now), stalled_threshold_seconds=3600
+    ) as adapter:  # noqa: E501
         row = adapter._conn.execute(
             "SELECT status FROM runs WHERE run_id = ?", ("a" * 32,)
         ).fetchone()

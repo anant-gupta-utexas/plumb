@@ -1,4 +1,6 @@
 """Tests for _schema.py — DDL string correctness (Task 1.2)."""
+# ruff: noqa: E501 — _TRD_DDL is a pinned copy of TRD §7.1 SQL; line breaks must mirror
+# the source exactly so the diff against DDL_STATEMENTS stays meaningful.
 
 import sqlite3
 
@@ -80,6 +82,7 @@ CREATE INDEX IF NOT EXISTS idx_examples_origin      ON examples(origin_run_id)""
 def _normalize(sql: str) -> str:
     """Strip trailing semicolons and collapse whitespace for comparison."""
     import re
+
     sql = sql.rstrip(";").strip()
     sql = re.sub(r"[ \t]+", " ", sql)
     sql = re.sub(r"\n ", "\n", sql)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -10,8 +10,7 @@ from plumb.api import RunHandle, _RunBuilder
 from plumb.core.entities import RunKind, SpanKind, SpanStatus
 from plumb.core.errors import ValidationError
 
-
-_START = datetime(2024, 1, 1, tzinfo=timezone.utc)
+_START = datetime(2024, 1, 1, tzinfo=UTC)
 _RUN_ID = "a" * 32
 
 
@@ -136,8 +135,8 @@ class TestAddSpan:
 
 class TestAddScore:
     def test_numeric_score(self, monkeypatch: pytest.MonkeyPatch) -> None:
+
         import plumb.api as _api
-        from datetime import timezone
         from tests.conftest import FakeClock, FakeIdGenerator
 
         monkeypatch.setattr(_api, "_id_gen", FakeIdGenerator())

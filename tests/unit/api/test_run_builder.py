@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from plumb.api import _RunBuilder
-from plumb.core.entities import RunKind, RunStatus, SpanKind, SpanStatus
+from plumb.core.entities import RunKind, RunStatus
 from plumb.core.errors import ValidationError
 
-
-_START = datetime(2024, 1, 1, tzinfo=timezone.utc)
-_END = datetime(2024, 1, 1, 0, 0, 10, tzinfo=timezone.utc)
+_START = datetime(2024, 1, 1, tzinfo=UTC)
+_END = datetime(2024, 1, 1, 0, 0, 10, tzinfo=UTC)
 _RUN_ID = "a" * 32
 _SPAN_ID = "b" * 32
 _TASK = "test-task"

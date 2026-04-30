@@ -5,11 +5,9 @@ from __future__ import annotations
 import math
 
 import pytest
-from hypothesis import given, settings
-from hypothesis import strategies as st
+from hypothesis import given, settings, strategies as st
 
 from plumb.core.stats import benjamini_hochberg, mcnemar_paired
-
 
 # ---------------------------------------------------------------------------
 # McNemar — known-answer reference cases (§6.3 algorithms doc)
@@ -21,14 +19,13 @@ from plumb.core.stats import benjamini_hochberg, mcnemar_paired
     [
         # Reference values computed via scipy.stats.chi2.sf with Yates' correction
         (10, 2, 0.04331, 1e-4),
-        (5, 5, 0.75183, 1e-4),   # corrected statistic = 0.1; p < 1 with correction
+        (5, 5, 0.75183, 1e-4),  # corrected statistic = 0.1; p < 1 with correction
         (20, 0, 2.152e-5, 1e-6),
-        (1, 0, 1.0, 1e-6),       # n_discordant=1, statistic=0 with correction
+        (1, 0, 1.0, 1e-6),  # n_discordant=1, statistic=0 with correction
         (100, 50, 6.312e-5, 1e-6),
     ],
 )
 def test_mcnemar_known_answers(b: int, c: int, expected_p: float, tol: float) -> None:
-    n = b + c
     baseline = [True] * b + [False] * c
     candidate = [False] * b + [True] * c
     result = mcnemar_paired(baseline, candidate)
@@ -99,7 +96,6 @@ def test_mcnemar_cross_check_scipy() -> None:
     result = mcnemar_paired(bl, cn)
     # Manually reproduce Yates-corrected chi2 via scipy.stats.chi2.sf for cross-check.
     # statistic = (|b-c|-1)^2 / (b+c)
-    import math
     b, c = 10, 2
     stat = (abs(b - c) - 1) ** 2 / (b + c)
     expected_p = float(scipy_stats.chi2.sf(stat, df=1))
@@ -187,7 +183,7 @@ def test_bh_all_zero() -> None:
 def test_bh_preserves_input_order() -> None:
     p = [0.5, 0.001, 0.04]
     result = benjamini_hochberg(p, alpha=0.05)
-    assert result[1] is True   # 0.001 is clearly significant
+    assert result[1] is True  # 0.001 is clearly significant
     assert result[0] is False  # 0.5 is clearly not
 
 
@@ -209,8 +205,8 @@ def test_bh_rejected_are_sorted_prefix(p_vals: list[float]) -> None:
     result = benjamini_hochberg(p_vals, alpha=0.05)
     assert len(result) == len(p_vals)
 
-    rejected_vals = sorted(p for p, rej in zip(p_vals, result) if rej)
-    non_rejected_vals = sorted(p for p, rej in zip(p_vals, result) if not rej)
+    rejected_vals = sorted(p for p, rej in zip(p_vals, result, strict=True) if rej)
+    non_rejected_vals = sorted(p for p, rej in zip(p_vals, result, strict=True) if not rej)
 
     if rejected_vals and non_rejected_vals:
         # Every rejected p-value must be <= every non-rejected p-value

@@ -7,7 +7,7 @@ import inspect
 import pytest
 
 from plumb.api import run
-from plumb.core.entities import RunStatus, SpanKind
+from plumb.core.entities import RunStatus
 
 
 class TestSyncDecoratorBasics:
@@ -116,9 +116,7 @@ class TestDecoratorNestedDedup:
         assert len(storage.runs) == 1
         assert storage.last_run.status == "success"
 
-    def test_decorator_on_sync_fn_args_kwargs_forwarded(
-        self, configured_api: object
-    ) -> None:
+    def test_decorator_on_sync_fn_args_kwargs_forwarded(self, configured_api: object) -> None:
         @run(task_id="t")
         def add(a: int, b: int = 0) -> int:
             return a + b

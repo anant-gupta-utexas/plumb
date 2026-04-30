@@ -9,8 +9,6 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-import pytest
-
 from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
 from plumb.core.entities import Run, RunKind, RunStatus
 
@@ -41,9 +39,11 @@ def _make_run(run_id: str, task_id: str = "task") -> Run:
 def test_two_adapters_open_same_db_without_error(tmp_path: Path) -> None:
     """Two SQLiteStorageAdapter instances on the same db_path both open cleanly."""
     db = tmp_path / "shared.db"
-    with SQLiteStorageAdapter(db, clock=_CLOCK) as adapter1:
-        with SQLiteStorageAdapter(db, clock=_CLOCK) as adapter2:
-            assert adapter1 is not adapter2
+    with (
+        SQLiteStorageAdapter(db, clock=_CLOCK) as adapter1,
+        SQLiteStorageAdapter(db, clock=_CLOCK) as adapter2,
+    ):
+        assert adapter1 is not adapter2
 
 
 def test_reader_sees_data_committed_by_writer(tmp_path: Path) -> None:
@@ -62,22 +62,27 @@ def test_reader_sees_data_committed_by_writer(tmp_path: Path) -> None:
 
 
 def test_reader_sees_data_after_writer_commits_concurrent_adapters(tmp_path: Path) -> None:
-    """Reader adapter sees a run written by writer adapter after commit (both open simultaneously)."""
+    """Reader adapter sees a run written by writer adapter after commit.
+
+    Both adapters are open simultaneously.
+    """
     db = tmp_path / "shared.db"
     run = _make_run("b" * 32, "concurrent-task")
 
-    with SQLiteStorageAdapter(db, clock=_CLOCK) as writer:
-        with SQLiteStorageAdapter(db, clock=_CLOCK) as reader:
-            # Before write: not visible
-            assert reader.get_run(run.run_id) is None
+    with (
+        SQLiteStorageAdapter(db, clock=_CLOCK) as writer,
+        SQLiteStorageAdapter(db, clock=_CLOCK) as reader,
+    ):
+        # Before write: not visible
+        assert reader.get_run(run.run_id) is None
 
-            # Writer commits
-            writer.write_run(run, [])
+        # Writer commits
+        writer.write_run(run, [])
 
-            # After commit: reader sees the data (WAL checkpoint not required for read)
-            result = reader.get_run(run.run_id)
-            assert result is not None
-            assert result.run_id == run.run_id
+        # After commit: reader sees the data (WAL checkpoint not required for read)
+        result = reader.get_run(run.run_id)
+        assert result is not None
+        assert result.run_id == run.run_id
 
 
 def test_writer_does_not_block_reader_list_runs(tmp_path: Path) -> None:
@@ -142,12 +147,14 @@ def test_concurrent_adapters_run_within_time_budget(tmp_path: Path) -> None:
     db = tmp_path / "shared.db"
     start = time.monotonic()
 
-    with SQLiteStorageAdapter(db, clock=_CLOCK) as writer:
-        with SQLiteStorageAdapter(db, clock=_CLOCK) as reader:
-            run = _make_run("c" * 32)
-            writer.write_run(run, [])
-            result = reader.get_run(run.run_id)
-            assert result is not None
+    with (
+        SQLiteStorageAdapter(db, clock=_CLOCK) as writer,
+        SQLiteStorageAdapter(db, clock=_CLOCK) as reader,
+    ):
+        run = _make_run("c" * 32)
+        writer.write_run(run, [])
+        result = reader.get_run(run.run_id)
+        assert result is not None
 
     elapsed = time.monotonic() - start
     assert elapsed < 2.0, f"Concurrent adapter test took {elapsed:.2f}s, budget is 2s"

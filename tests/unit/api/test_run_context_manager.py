@@ -31,6 +31,7 @@ class TestBasicContextManager:
         with run(task_id="t") as r:
             rid = r.run_id
         import re
+
         assert re.match(r"^[0-9a-f]{32}$", rid)
 
     def test_task_id_propagated(self, configured_api: object) -> None:
@@ -44,9 +45,7 @@ class TestBasicContextManager:
 
 
 class TestEdgeCases:
-    def test_fr_edge_1_exception_reraise_and_failure_status(
-        self, configured_api: object
-    ) -> None:
+    def test_fr_edge_1_exception_reraise_and_failure_status(self, configured_api: object) -> None:
         """FR-EDGE-1: user exception re-raised AND run written as failure."""
         from tests.conftest import FakeStorageWriter
 
@@ -74,9 +73,7 @@ class TestEdgeCases:
         assert storage.last_run.status == RunStatus.SUCCESS
         assert storage.last_spans == []
 
-    def test_fr_edge_5_abort_status_and_partial_flush(
-        self, configured_api: object
-    ) -> None:
+    def test_fr_edge_5_abort_status_and_partial_flush(self, configured_api: object) -> None:
         """FR-EDGE-5: abort writes pre-abort spans; post-abort spans not persisted."""
         from tests.conftest import FakeStorageWriter
 
@@ -103,9 +100,7 @@ class TestEdgeCases:
 
 
 class TestNesting:
-    def test_fr_graph_1_nested_run_inherits_parent_run_id(
-        self, configured_api: object
-    ) -> None:
+    def test_fr_graph_1_nested_run_inherits_parent_run_id(self, configured_api: object) -> None:
         """FR-GRAPH-1: nested `with run()` → child.parent_run_id == outer.run_id."""
         from tests.conftest import FakeStorageWriter
 
@@ -162,7 +157,7 @@ class TestNFRRel1:
         storage.finalize_run = _raise  # type: ignore[method-assign]
 
         result = None
-        with caplog.at_level(logging.WARNING, logger="plumb.api"), run(task_id="t") as r:
+        with caplog.at_level(logging.WARNING, logger="plumb.api"), run(task_id="t"):
             result = 42
 
         assert result == 42  # user return value unaffected
@@ -170,9 +165,7 @@ class TestNFRRel1:
         # WARNING should be logged
         assert any("plumb" in r.message.lower() for r in caplog.records)
 
-    def test_storage_error_user_exception_still_reraised(
-        self, configured_api: object
-    ) -> None:
+    def test_storage_error_user_exception_still_reraised(self, configured_api: object) -> None:
         """NFR-Rel-1 + FR-EDGE-1: even when storage fails, user exception is re-raised."""
         from tests.conftest import FakeStorageWriter
 

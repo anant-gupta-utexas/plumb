@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Generator
 
 import httpx
 import pytest
 
 import plumb.api as _api
 import plumb.autocapture as _autocapture
-import plumb.autocapture._state as _state
 from plumb.adapters.blobstore_fs import FilesystemBlobStore
 from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
 
@@ -159,7 +158,7 @@ CANNED_OPENAI_RATE_LIMIT = {
 
 
 @pytest.fixture()
-def real_adapter(tmp_path: Path) -> Generator[SQLiteStorageAdapter, None, None]:
+def real_adapter(tmp_path: Path) -> Generator[SQLiteStorageAdapter]:
     adapter = SQLiteStorageAdapter(tmp_path / "plumb.db", clock=_FakeClock())
     yield adapter
     adapter.close()
@@ -184,7 +183,7 @@ def configured_api(
 
 
 @pytest.fixture(autouse=True)
-def clean_install_registry() -> Generator[None, None, None]:
+def clean_install_registry() -> Generator[None]:
     """Uninstall all patches before and after each test to prevent wrapper stacking."""
     _autocapture.uninstall()
     yield
