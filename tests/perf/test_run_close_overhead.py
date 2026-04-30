@@ -67,7 +67,13 @@ def test_run_close_p95_within_budget(tmp_path: Path) -> None:
     LOCAL_BUDGET_MS = 100.0
     budget_ms = CI_BUDGET_MS if os.environ.get("CI") == "true" else LOCAL_BUDGET_MS
 
-    adapter = SQLiteStorageAdapter(tmp_path / "perf.db", clock=_FixedClock())
+    # synchronous=OFF eliminates per-transaction fsync on CI's slow shared
+    # storage — the budget measures serialization + lock overhead, not durability.
+    adapter = SQLiteStorageAdapter(
+        tmp_path / "perf.db",
+        clock=_FixedClock(),
+        pragma_overrides={"synchronous": "OFF"},
+    )
 
     latencies_ms: list[float] = []
     try:

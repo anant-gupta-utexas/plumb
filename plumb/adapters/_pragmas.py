@@ -22,9 +22,18 @@ _PRAGMA_EXPECTED: dict[str, object] = {
 }
 
 
-def apply_pragmas(conn: sqlite3.Connection) -> None:
-    """Apply WAL + durability + FK pragmas. Safe to call multiple times."""
-    for name, value in _PRAGMAS.items():
+def apply_pragmas(
+    conn: sqlite3.Connection,
+    *,
+    overrides: dict[str, str | int] | None = None,
+) -> None:
+    """Apply WAL + durability + FK pragmas. Safe to call multiple times.
+
+    ``overrides`` merges into the defaults — use only in tests (e.g. synchronous=OFF
+    to bypass fsync on ephemeral tmp_path DBs).
+    """
+    pragmas = {**_PRAGMAS, **(overrides or {})}
+    for name, value in pragmas.items():
         conn.execute(f"PRAGMA {name}={value}")  # noqa: S608 — name/value come from module-level literal dict, not user input
 
 

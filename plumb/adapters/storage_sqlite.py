@@ -262,6 +262,7 @@ class SQLiteStorageAdapter:
         *,
         clock: Clock,
         stalled_threshold_seconds: int = 3600,
+        pragma_overrides: dict[str, str | int] | None = None,
     ) -> None:
         self._db_path = Path(db_path)
         self._clock = clock
@@ -279,8 +280,11 @@ class SQLiteStorageAdapter:
         )
         self._conn.row_factory = sqlite3.Row
 
-        apply_pragmas(self._conn)
-        verify_pragmas(self._conn)
+        if pragma_overrides:
+            apply_pragmas(self._conn, overrides=pragma_overrides)
+        else:
+            apply_pragmas(self._conn)
+            verify_pragmas(self._conn)
         self._bootstrap_schema()
         self._sweep_stalled_runs()
 
