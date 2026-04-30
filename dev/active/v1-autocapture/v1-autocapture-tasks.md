@@ -2,7 +2,7 @@
 
 **Companion to:** [`v1-autocapture-plan.md`](./v1-autocapture-plan.md) and [`v1-autocapture-context.md`](./v1-autocapture-context.md)
 **Owner:** anant
-**Last updated:** 2026-04-26
+**Last updated:** 2026-04-29
 
 This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M = 1–4 hr, L = 4–8 hr, XL = > 8 hr), the files it touches, acceptance criteria, dependencies on other tasks, and testing requirements. Phases are sequential top-to-bottom; within a phase, tasks run in declared order unless flagged parallel.
 
@@ -24,9 +24,9 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** New empty package `plumb/autocapture/` with `__init__.py` declaring (but not yet implementing) `install()`, `uninstall()`, `is_installed()`. Package marker MUST NOT import anything from `_anthropic.py` / `_openai.py`.
 - **Acceptance Criteria:**
-    - [ ] `plumb/autocapture/__init__.py` exists with three function stubs returning `None` / `False`.
-    - [ ] `python -c "import plumb.autocapture; print(plumb.autocapture.is_installed())"` prints `False`.
-    - [ ] `tests/perf/test_cold_import.py` (re-run with `PLUMB_AUTOCAPTURE=1`) still passes.
+    - [x] `plumb/autocapture/__init__.py` exists with three function stubs returning `None` / `False`.
+    - [x] `python -c "import plumb.autocapture; print(plumb.autocapture.is_installed())"` prints `False`.
+    - [x] `tests/perf/test_cold_import.py` (re-run with `PLUMB_AUTOCAPTURE=1`) still passes.
 - **Files to Create/Modify:**
     - `plumb/autocapture/__init__.py` — new
     - `plumb/autocapture/_state.py` — new (empty placeholder)
@@ -37,10 +37,10 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** `_Patch` dataclass + `_INSTALL_LOCK` (threading.Lock) + `_INSTALLED: dict[str, _Patch]`. Provide internal helpers `_register(patch)` / `_unregister(key)` / `_is_registered(key)` for use by per-provider modules.
 - **Acceptance Criteria:**
-    - [ ] `_Patch` is a frozen dataclass with `target_module: str`, `target_qualname: str`, `original: Callable`.
-    - [ ] `_INSTALL_LOCK` is a module-level `threading.Lock`.
-    - [ ] `_register` / `_unregister` mutate `_INSTALLED` under the lock.
-    - [ ] Unit test: concurrent `_register` calls from 4 threads on distinct keys produce a 4-entry registry; same-key registration is idempotent.
+    - [x] `_Patch` is a frozen dataclass with `target_module: str`, `target_qualname: str`, `original: Callable`.
+    - [x] `_INSTALL_LOCK` is a module-level `threading.Lock`.
+    - [x] `_register` / `_unregister` mutate `_INSTALLED` under the lock.
+    - [x] Unit test: concurrent `_register` calls from 4 threads on distinct keys produce a 4-entry registry; same-key registration is idempotent.
 - **Files to Create/Modify:**
     - `plumb/autocapture/_state.py` — implement
     - `tests/unit/autocapture/test_state.py` — new
@@ -51,10 +51,10 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** `__init__.py` `install()` iterates over an internal `_PROVIDERS` tuple of `(name, try_install_callable)` pairs. Each `try_install` is imported lazily inside the function. `uninstall()` walks `_INSTALLED` and restores. `is_installed()` returns `bool(_INSTALLED)`.
 - **Acceptance Criteria:**
-    - [ ] `install()` is idempotent — second call is a no-op.
-    - [ ] `uninstall()` is idempotent — leaves `_INSTALLED` empty.
-    - [ ] `install()` then `uninstall()` then `is_installed()` returns `False`.
-    - [ ] With neither anthropic nor openai installed, `install()` does nothing and `is_installed()` returns `False` without error.
+    - [x] `install()` is idempotent — second call is a no-op.
+    - [x] `uninstall()` is idempotent — leaves `_INSTALLED` empty.
+    - [x] `install()` then `uninstall()` then `is_installed()` returns `False`.
+    - [x] With neither anthropic nor openai installed, `install()` does nothing and `is_installed()` returns `False` without error.
 - **Files to Create/Modify:**
     - `plumb/autocapture/__init__.py` — implement
     - `tests/unit/autocapture/test_install.py` — new
@@ -76,10 +76,10 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 - **Description:** Pure-function `_canonical_json(obj: Any) -> bytes` returning `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")`. Plus the four provider-specific `canonicalize_{provider}_{direction}` shells that call it after extracting the relevant fields from SDK request kwargs / response objects.
 - **Acceptance Criteria:**
-    - [ ] `_canonical_json({"b": 2, "a": 1})` == `_canonical_json({"a": 1, "b": 2})` (key-order insensitive).
-    - [ ] Result is `bytes` and round-trips: `json.loads(result.decode("utf-8")) == original_dict`.
-    - [ ] UTF-8 with non-ASCII (e.g., `"こんにちは"`) preserves multi-byte without surrogate pairs.
-    - [ ] Hypothesis property test: random nested dicts produce identical bytes regardless of input ordering.
+    - [x] `_canonical_json({"b": 2, "a": 1})` == `_canonical_json({"a": 1, "b": 2})` (key-order insensitive).
+    - [x] Result is `bytes` and round-trips: `json.loads(result.decode("utf-8")) == original_dict`.
+    - [x] UTF-8 with non-ASCII (e.g., `"こんにちは"`) preserves multi-byte without surrogate pairs.
+    - [x] Hypothesis property test: random nested dicts produce identical bytes regardless of input ordering.
 - **Files to Create/Modify:**
     - `plumb/autocapture/_payloads.py` — new
     - `tests/unit/autocapture/test_payloads.py` — new
@@ -88,15 +88,15 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
 ### Task 2.2 — Implement recursive secret redaction [Effort: M]
 
-- **Description:** `_redact(obj: Any) -> Any` walks dicts/lists; for any dict key matching `re.compile(r"(?i)(api[_-]?key|token|secret|authorization|x-api-key|bearer)")`, replace value with `"<redacted>"`. Pure function; never mutates input. Compile regex once at module load.
+- **Description:** `_redact(obj: Any) -> Any` walks dicts/lists; for any dict key matching `re.compile(r"(?i)(api[_-]?key|(?<![a-zA-Z])token(?!s)|secret|authorization|x-api-key|bearer)")`, replace value with `"<redacted>"`. Pure function; never mutates input. Compile regex once at module load.
 - **Acceptance Criteria:**
-    - [ ] `_redact({"api_key": "sk-real"})` → `{"api_key": "<redacted>"}`.
-    - [ ] Case-insensitive: `_redact({"API_KEY": "sk-real"})` redacts.
-    - [ ] Recursive: `_redact({"outer": {"nested_token": "abc"}})` redacts inside nested dict.
-    - [ ] List handling: `_redact([{"token": "x"}, {"token": "y"}])` redacts both.
-    - [ ] Non-secret keys preserved: `_redact({"messages": [...]})` untouched.
-    - [ ] Original input unchanged (immutability).
-    - [ ] Regex coverage test: assert positive matches for `api_key`, `apiKey`, `api-key`, `token`, `secret`, `authorization`, `x-api-key`, `bearer_token`. Assert negatives for `messages`, `model`, `temperature`.
+    - [x] `_redact({"api_key": "sk-real"})` → `{"api_key": "<redacted>"}`.
+    - [x] Case-insensitive: `_redact({"API_KEY": "sk-real"})` redacts.
+    - [x] Recursive: `_redact({"outer": {"nested_token": "abc"}})` redacts inside nested dict.
+    - [x] List handling: `_redact([{"token": "x"}, {"token": "y"}])` redacts both.
+    - [x] Non-secret keys preserved: `_redact({"messages": [...]})` untouched.
+    - [x] Original input unchanged (immutability).
+    - [x] Regex coverage test: assert positive matches for `api_key`, `apiKey`, `api-key`, `token`, `secret`, `authorization`, `x-api-key`, `bearer_token`. Assert negatives for `messages`, `model`, `temperature`, `max_tokens`.
 - **Files to Create/Modify:**
     - `plumb/autocapture/_payloads.py` — extend
     - `tests/unit/autocapture/test_payloads.py` — extend
@@ -115,10 +115,10 @@ This is the implementation checklist. Each task carries effort (S = ≤ 1 hr, M 
 
   Each: build a dict from the SDK's input or response, redact, canonical-serialize. Response side uses `response.model_dump()` (pydantic v2) when available, else `dict(response)` fallback for plain dicts.
 - **Acceptance Criteria:**
-    - [ ] Each function returns `bytes`.
-    - [ ] Anthropic request with `messages=[{"role":"user","content":"hi"}]` and `extra_headers={"Authorization":"Bearer sk-x"}` produces bytes with `<redacted>` and not `sk-x`.
-    - [ ] OpenAI chat response with `usage={"prompt_tokens":10,"completion_tokens":5}` round-trips token counts.
-    - [ ] Same input → identical bytes across two calls (determinism).
+    - [x] Each function returns `bytes`.
+    - [x] Anthropic request with `messages=[{"role":"user","content":"hi"}]` and `extra_headers={"Authorization":"Bearer sk-x"}` produces bytes with `<redacted>` and not `sk-x`.
+    - [x] OpenAI chat response with `usage={"prompt_tokens":10,"completion_tokens":5}` round-trips token counts.
+    - [x] Same input → identical bytes across two calls (determinism).
 - **Files to Create/Modify:**
     - `plumb/autocapture/_payloads.py` — extend
     - `tests/unit/autocapture/test_payloads.py` — extend
