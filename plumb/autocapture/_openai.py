@@ -16,7 +16,7 @@ from plumb.autocapture._state import _INSTALLED, _is_registered, _Patch
 logger = logging.getLogger(__name__)
 
 _CHAT_MODULE = "openai.resources.chat.completions"
-_RESPONSES_MODULE = "openai.resources.responses.responses"
+_RESPONSES_MODULE = "openai.resources.responses"
 
 _CHAT_REQ = "canonicalize_openai_chat_request"
 _CHAT_RESP = "canonicalize_openai_chat_response"
@@ -103,6 +103,16 @@ def _wrap_sync(original: Any, endpoint: str, req_canon: str, resp_canon: str) ->
 
         from plumb.autocapture import _emit
 
+        if kwargs.get("stream") is True:
+            _emit.emit_unsupported_stream_span(
+                provider="openai",
+                endpoint=endpoint,
+                model=kwargs.get("model"),
+                request_payload=request_payload,
+                latency_ms=(time.perf_counter() - start) * 1000,
+            )
+            return response
+
         _emit.emit_success_span(
             provider="openai",
             endpoint=endpoint,
@@ -143,6 +153,16 @@ def _wrap_async(original: Any, endpoint: str, req_canon: str, resp_canon: str) -
             raise
 
         from plumb.autocapture import _emit
+
+        if kwargs.get("stream") is True:
+            _emit.emit_unsupported_stream_span(
+                provider="openai",
+                endpoint=endpoint,
+                model=kwargs.get("model"),
+                request_payload=request_payload,
+                latency_ms=(time.perf_counter() - start) * 1000,
+            )
+            return response
 
         _emit.emit_success_span(
             provider="openai",

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 _TARGET_MODULE = "anthropic.resources.messages"
 _TARGETS = [
     ("Messages", "create"),
+    ("Messages", "stream"),
     ("AsyncMessages", "create"),
 ]
 
@@ -49,7 +50,9 @@ def _try_install() -> None:
             )
             continue
 
-        if cls_name == "AsyncMessages":
+        if method_name == "stream":
+            wrapped = _wrap_messages_stream(original)
+        elif cls_name == "AsyncMessages":
             wrapped = _wrap_async_messages_create(original)
         else:
             wrapped = _wrap_messages_create(original)
@@ -99,6 +102,46 @@ def _wrap_messages_create(original: Any) -> Any:
             latency_ms=(time.perf_counter() - start) * 1000,
         )
         return response
+
+    return wrapper
+
+
+def _wrap_messages_stream(original: Any) -> Any:
+    @functools.wraps(original)
+    def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        from plumb.api import _active_run
+
+        active = _active_run.get()
+        if active is None:
+            return original(self, *args, **kwargs)
+
+        start = time.perf_counter()
+        request_payload = _payloads.canonicalize_anthropic_request(args, kwargs)
+        try:
+            stream = original(self, *args, **kwargs)
+        except BaseException as exc:
+            from plumb.autocapture import _emit
+
+            _emit.emit_failure_span(
+                provider="anthropic",
+                endpoint="messages",
+                model=kwargs.get("model"),
+                request_payload=request_payload,
+                latency_ms=(time.perf_counter() - start) * 1000,
+                error_type=type(exc).__name__,
+            )
+            raise
+
+        from plumb.autocapture import _emit
+
+        _emit.emit_unsupported_stream_span(
+            provider="anthropic",
+            endpoint="messages",
+            model=kwargs.get("model"),
+            request_payload=request_payload,
+            latency_ms=(time.perf_counter() - start) * 1000,
+        )
+        return stream
 
     return wrapper
 

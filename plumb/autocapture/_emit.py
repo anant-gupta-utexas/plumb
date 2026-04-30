@@ -172,3 +172,50 @@ def emit_failure_span(
                 "error_class": type(exc).__name__,
             },
         )
+
+
+def emit_unsupported_stream_span(
+    *,
+    provider: str,
+    endpoint: str | None,
+    model: str | None,
+    request_payload: bytes,
+    latency_ms: float,
+) -> None:
+    try:
+        active = _get_active_run()
+        if active is None:
+            logger.debug(
+                "plumb autocapture: no active run, stream span skipped",
+                extra={"subsystem": "autocapture", "provider": provider},
+            )
+            return
+
+        input_hash = hashlib.sha256(request_payload).hexdigest()
+        _put_blob(request_payload)
+
+        endpoint_str = endpoint or "unknown"
+        model_str = model or "unknown"
+        span_name = f"{provider}/{endpoint_str}/{model_str}"
+
+        active.add_span(
+            SpanKind.LLM,
+            span_name,
+            input_hash=input_hash,
+            output_hash=None,
+            tokens=None,
+            latency_ms=latency_ms,
+            status=SpanStatus.SUCCESS,
+            error_type="unsupported_stream_capture",
+        )
+    except BaseException as exc:
+        logger.warning(
+            "plumb autocapture failure",
+            extra={
+                "plumb_internal_error": True,
+                "subsystem": "autocapture",
+                "provider": provider,
+                "endpoint": endpoint,
+                "error_class": type(exc).__name__,
+            },
+        )

@@ -15,9 +15,9 @@ def test_default_log_level() -> None:
     assert s.log_level == "WARNING"
 
 
-def test_default_autocapture_false() -> None:
+def test_default_autocapture_true() -> None:
     s = Settings()
-    assert s.autocapture is False
+    assert s.autocapture is True
 
 
 def test_default_data_dir_is_path() -> None:

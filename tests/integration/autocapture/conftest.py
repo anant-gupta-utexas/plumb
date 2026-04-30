@@ -50,6 +50,28 @@ class _AsyncAnthropicTransport(httpx.AsyncBaseTransport):
         return httpx.Response(self._status, json=self._body)
 
 
+class _SyncOpenAITransport(httpx.BaseTransport):
+    """Returns canned OpenAI responses for chat or responses endpoints."""
+
+    def __init__(self, body: dict, status: int = 200) -> None:
+        self._body = body
+        self._status = status
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        return httpx.Response(self._status, json=self._body, request=request)
+
+
+class _AsyncOpenAITransport(httpx.AsyncBaseTransport):
+    """Returns canned OpenAI responses for chat or responses endpoints (async)."""
+
+    def __init__(self, body: dict, status: int = 200) -> None:
+        self._body = body
+        self._status = status
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        return httpx.Response(self._status, json=self._body, request=request)
+
+
 CANNED_ANTHROPIC_MESSAGE = {
     "id": "msg_test123",
     "type": "message",
@@ -64,6 +86,75 @@ CANNED_ANTHROPIC_MESSAGE = {
 CANNED_ANTHROPIC_RATE_LIMIT = {
     "type": "error",
     "error": {"type": "rate_limit_error", "message": "Rate limited"},
+}
+
+CANNED_OPENAI_CHAT_COMPLETION = {
+    "id": "chatcmpl_test123",
+    "object": "chat.completion",
+    "created": 1710000000,
+    "model": "gpt-4o",
+    "choices": [
+        {
+            "index": 0,
+            "message": {"role": "assistant", "content": "Hello from stub!"},
+            "finish_reason": "stop",
+        }
+    ],
+    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+}
+
+CANNED_OPENAI_RESPONSE = {
+    "id": "resp_test123",
+    "object": "response",
+    "created_at": 1710000000,
+    "status": "completed",
+    "error": None,
+    "incomplete_details": None,
+    "instructions": None,
+    "max_output_tokens": None,
+    "model": "gpt-4o",
+    "output": [
+        {
+            "id": "msg_test123",
+            "type": "message",
+            "status": "completed",
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "output_text",
+                    "text": "Hello from stub!",
+                    "annotations": [],
+                }
+            ],
+        }
+    ],
+    "parallel_tool_calls": True,
+    "previous_response_id": None,
+    "reasoning": {"effort": None, "summary": None},
+    "store": True,
+    "temperature": 1.0,
+    "text": {"format": {"type": "text"}},
+    "tool_choice": "auto",
+    "tools": [],
+    "top_p": 1.0,
+    "truncation": "disabled",
+    "usage": {
+        "input_tokens": 10,
+        "input_tokens_details": {"cached_tokens": 0},
+        "output_tokens": 5,
+        "output_tokens_details": {"reasoning_tokens": 0},
+        "total_tokens": 15,
+    },
+    "user": None,
+    "metadata": {},
+}
+
+CANNED_OPENAI_RATE_LIMIT = {
+    "error": {
+        "message": "Rate limited",
+        "type": "rate_limit_exceeded",
+        "code": "rate_limit_exceeded",
+    }
 }
 
 
