@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
 from typing import Any
 
 import pytest
 
 import plumb.autocapture._state as state
-from plumb.autocapture._state import _Patch, _is_registered, _register, _unregister
+from plumb.autocapture._state import _is_registered, _Patch, _register, _unregister
 
 
 def _noop(*args: Any, **kwargs: Any) -> None:

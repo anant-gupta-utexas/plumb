@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -18,7 +17,6 @@ from plumb.autocapture._payloads import (
     canonicalize_openai_responses_request,
     canonicalize_openai_responses_response,
 )
-
 
 # ---------------------------------------------------------------------------
 # Task 2.1 — _canonical_json
@@ -68,23 +66,46 @@ class TestCanonicalJson:
 
 class TestRedact:
     # Positive cases — should be redacted
-    @pytest.mark.parametrize("key", [
-        "api_key", "apiKey", "api-key", "API_KEY",
-        "token", "Token", "TOKEN",
-        "secret", "Secret",
-        "authorization", "Authorization", "AUTHORIZATION",
-        "x-api-key", "X-API-KEY",
-        "bearer_token", "Bearer",
-    ])
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "api_key",
+            "apiKey",
+            "api-key",
+            "API_KEY",
+            "token",
+            "Token",
+            "TOKEN",
+            "secret",
+            "Secret",
+            "authorization",
+            "Authorization",
+            "AUTHORIZATION",
+            "x-api-key",
+            "X-API-KEY",
+            "bearer_token",
+            "Bearer",
+        ],
+    )
     def test_redacts_matching_key(self, key: str) -> None:
         result = _redact({key: "sk-real-value"})
         assert result[key] == "<redacted>", f"key {key!r} should be redacted"
 
     # Negative cases — should NOT be redacted
-    @pytest.mark.parametrize("key", [
-        "messages", "model", "temperature", "content", "role",
-        "max_tokens", "system", "tools", "stop_sequences",
-    ])
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "messages",
+            "model",
+            "temperature",
+            "content",
+            "role",
+            "max_tokens",
+            "system",
+            "tools",
+            "stop_sequences",
+        ],
+    )
     def test_preserves_non_secret_key(self, key: str) -> None:
         result = _redact({key: "some-value"})
         assert result[key] == "some-value", f"key {key!r} should not be redacted"
@@ -169,7 +190,8 @@ class TestAnthropicExtractors:
 
     def test_request_deterministic(self) -> None:
         kwargs = {"model": "claude-3", "messages": [{"role": "user", "content": "hi"}]}
-        assert canonicalize_anthropic_request((), kwargs) == canonicalize_anthropic_request((), kwargs)
+        result = canonicalize_anthropic_request((), kwargs)
+        assert result == canonicalize_anthropic_request((), kwargs)
 
     def test_response_returns_bytes(self) -> None:
         resp = _FakeResponse(model="claude-3", content=[], usage={"input_tokens": 10})
@@ -216,14 +238,13 @@ class TestOpenAIChatExtractors:
 
     def test_request_deterministic(self) -> None:
         kwargs = {"model": "gpt-4o", "messages": []}
-        assert canonicalize_openai_chat_request((), kwargs) == canonicalize_openai_chat_request((), kwargs)
+        result = canonicalize_openai_chat_request((), kwargs)
+        assert result == canonicalize_openai_chat_request((), kwargs)
 
 
 class TestOpenAIResponsesExtractors:
     def test_request_returns_bytes(self) -> None:
-        result = canonicalize_openai_responses_request(
-            (), {"model": "gpt-4o", "input": "hi"}
-        )
+        result = canonicalize_openai_responses_request((), {"model": "gpt-4o", "input": "hi"})
         assert isinstance(result, bytes)
 
     def test_response_input_output_tokens(self) -> None:
@@ -235,10 +256,9 @@ class TestOpenAIResponsesExtractors:
 
     def test_request_deterministic(self) -> None:
         kwargs = {"model": "gpt-4o", "input": "x"}
-        assert (
-            canonicalize_openai_responses_request((), kwargs)
-            == canonicalize_openai_responses_request((), kwargs)
-        )
+        assert canonicalize_openai_responses_request(
+            (), kwargs
+        ) == canonicalize_openai_responses_request((), kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -259,9 +279,7 @@ if _has_hypothesis:
     _simple = st.one_of(st.integers(), st.text(max_size=20), st.none(), st.booleans())
     _json_dict = st.recursive(
         st.dictionaries(st.text(min_size=1, max_size=10), _simple, max_size=5),
-        lambda children: st.dictionaries(
-            st.text(min_size=1, max_size=10), children, max_size=3
-        ),
+        lambda children: st.dictionaries(st.text(min_size=1, max_size=10), children, max_size=3),
         max_leaves=10,
     )
 
@@ -269,7 +287,6 @@ if _has_hypothesis:
     @settings(max_examples=200)
     def test_canonical_json_order_invariant(d: dict) -> None:
         """Random nested dicts produce identical bytes regardless of input ordering."""
-        import copy
 
         # Produce the same dict with reversed key order at the top level
         d2 = dict(reversed(list(d.items())))

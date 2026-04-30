@@ -27,6 +27,7 @@ def install() -> None:
         for module_path in _PROVIDERS:
             try:
                 import importlib
+
                 mod = importlib.import_module(module_path)
                 mod._try_install()
             except BaseException as exc:
@@ -47,6 +48,7 @@ def uninstall() -> None:
         for key, patch in list(_INSTALLED.items()):
             try:
                 import importlib
+
                 mod = importlib.import_module(patch.target_module)
                 # Walk the qualname to find the class, then restore the method.
                 parts = patch.target_qualname.split(".")

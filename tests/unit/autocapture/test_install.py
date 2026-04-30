@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-import plumb.autocapture._state as state
 import plumb.autocapture as autocapture
+import plumb.autocapture._state as state
 
 
 @pytest.fixture(autouse=True)
@@ -24,6 +23,7 @@ class TestIsInstalled:
 
     def test_true_when_something_registered(self) -> None:
         from plumb.autocapture._state import _Patch
+
         state._INSTALLED["fake.Key"] = _Patch("fake", "Key", lambda: None)
         assert autocapture.is_installed() is True
 
@@ -52,8 +52,9 @@ class TestUninstall:
     def test_install_uninstall_leaves_empty(self) -> None:
         """install() then uninstall() then is_installed() returns False."""
         # Manually populate registry as if install() had run
-        from plumb.autocapture._state import _Patch
         import types
+
+        from plumb.autocapture._state import _Patch
 
         # Create a fake module with a fake class method to restore
         fake_mod = types.ModuleType("fake_mod")
@@ -61,6 +62,7 @@ class TestUninstall:
         original_fn = fake_cls.create
         fake_mod.FakeCls = fake_cls
         import sys
+
         sys.modules["fake_mod"] = fake_mod
 
         state._INSTALLED["fake_mod.FakeCls.create"] = _Patch(

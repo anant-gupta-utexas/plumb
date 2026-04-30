@@ -18,11 +18,13 @@ logger = logging.getLogger(__name__)
 
 def _get_active_run() -> Any:
     from plumb.api import _active_run
+
     return _active_run.get()
 
 
 def _get_blobstore() -> Any:
     from plumb.api import _blobstore
+
     return _blobstore
 
 

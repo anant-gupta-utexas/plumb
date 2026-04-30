@@ -11,18 +11,23 @@ import time
 from typing import Any
 
 from plumb.autocapture import _payloads
-from plumb.autocapture._state import _INSTALLED, _Patch, _is_registered
+from plumb.autocapture._state import _INSTALLED, _is_registered, _Patch
 
 logger = logging.getLogger(__name__)
 
 _CHAT_MODULE = "openai.resources.chat.completions"
 _RESPONSES_MODULE = "openai.resources.responses.responses"
 
+_CHAT_REQ = "canonicalize_openai_chat_request"
+_CHAT_RESP = "canonicalize_openai_chat_response"
+_RESP_REQ = "canonicalize_openai_responses_request"
+_RESP_RESP = "canonicalize_openai_responses_response"
+
 _TARGETS = [
-    (_CHAT_MODULE, "Completions", "create", "chat", "canonicalize_openai_chat_request", "canonicalize_openai_chat_response"),
-    (_CHAT_MODULE, "AsyncCompletions", "create", "chat", "canonicalize_openai_chat_request", "canonicalize_openai_chat_response"),
-    (_RESPONSES_MODULE, "Responses", "create", "responses", "canonicalize_openai_responses_request", "canonicalize_openai_responses_response"),
-    (_RESPONSES_MODULE, "AsyncResponses", "create", "responses", "canonicalize_openai_responses_request", "canonicalize_openai_responses_response"),
+    (_CHAT_MODULE, "Completions", "create", "chat", _CHAT_REQ, _CHAT_RESP),
+    (_CHAT_MODULE, "AsyncCompletions", "create", "chat", _CHAT_REQ, _CHAT_RESP),
+    (_RESPONSES_MODULE, "Responses", "create", "responses", _RESP_REQ, _RESP_RESP),
+    (_RESPONSES_MODULE, "AsyncResponses", "create", "responses", _RESP_REQ, _RESP_RESP),
 ]
 
 
@@ -85,6 +90,7 @@ def _wrap_sync(original: Any, endpoint: str, req_canon: str, resp_canon: str) ->
             response = original(self, *args, **kwargs)
         except BaseException as exc:
             from plumb.autocapture import _emit
+
             _emit.emit_failure_span(
                 provider="openai",
                 endpoint=endpoint,
@@ -96,6 +102,7 @@ def _wrap_sync(original: Any, endpoint: str, req_canon: str, resp_canon: str) ->
             raise
 
         from plumb.autocapture import _emit
+
         _emit.emit_success_span(
             provider="openai",
             endpoint=endpoint,
@@ -124,6 +131,7 @@ def _wrap_async(original: Any, endpoint: str, req_canon: str, resp_canon: str) -
             response = await original(self, *args, **kwargs)
         except BaseException as exc:
             from plumb.autocapture import _emit
+
             _emit.emit_failure_span(
                 provider="openai",
                 endpoint=endpoint,
@@ -135,6 +143,7 @@ def _wrap_async(original: Any, endpoint: str, req_canon: str, resp_canon: str) -
             raise
 
         from plumb.autocapture import _emit
+
         _emit.emit_success_span(
             provider="openai",
             endpoint=endpoint,

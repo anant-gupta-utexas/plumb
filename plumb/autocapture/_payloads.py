@@ -26,16 +26,15 @@ _REDACTED = "<redacted>"
 
 def _canonical_json(obj: Any) -> bytes:
     """Return canonical UTF-8 JSON bytes: sorted keys, no whitespace, non-ASCII preserved."""
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(
+        "utf-8"
+    )
 
 
 def _redact(obj: Any) -> Any:
     """Recursively redact dict keys matching the secret pattern. Pure — never mutates input."""
     if isinstance(obj, dict):
-        return {
-            k: _REDACTED if _REDACT_RE.search(str(k)) else _redact(v)
-            for k, v in obj.items()
-        }
+        return {k: _REDACTED if _REDACT_RE.search(str(k)) else _redact(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_redact(item) for item in obj]
     return obj

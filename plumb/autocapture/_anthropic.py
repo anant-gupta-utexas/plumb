@@ -11,7 +11,7 @@ import time
 from typing import Any
 
 from plumb.autocapture import _payloads
-from plumb.autocapture._state import _INSTALLED, _Patch, _is_registered
+from plumb.autocapture._state import _INSTALLED, _is_registered, _Patch
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +77,7 @@ def _wrap_messages_create(original: Any) -> Any:
             response = original(self, *args, **kwargs)
         except BaseException as exc:
             from plumb.autocapture import _emit
+
             _emit.emit_failure_span(
                 provider="anthropic",
                 endpoint="messages",
@@ -88,6 +89,7 @@ def _wrap_messages_create(original: Any) -> Any:
             raise
 
         from plumb.autocapture import _emit
+
         _emit.emit_success_span(
             provider="anthropic",
             endpoint="messages",
@@ -116,6 +118,7 @@ def _wrap_async_messages_create(original: Any) -> Any:
             response = await original(self, *args, **kwargs)
         except BaseException as exc:
             from plumb.autocapture import _emit
+
             _emit.emit_failure_span(
                 provider="anthropic",
                 endpoint="messages",
@@ -127,6 +130,7 @@ def _wrap_async_messages_create(original: Any) -> Any:
             raise
 
         from plumb.autocapture import _emit
+
         _emit.emit_success_span(
             provider="anthropic",
             endpoint="messages",
