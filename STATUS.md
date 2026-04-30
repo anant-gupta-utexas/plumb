@@ -1,9 +1,9 @@
 ---
 project: plumb
 status: building
-phase: v1 (Phase 1, Week 3)
-last_updated: 2026-04-24
-next_gate: v1.0 tag — schema stable, atlas path-install ready
+phase: v1 (Phase 7, Week 4)
+last_updated: 2026-04-29
+next_gate: v1-autocapture slice (monkey-patch entry points)
 blocked_on: null
 ---
 
@@ -11,28 +11,29 @@ blocked_on: null
 
 ## Current
 
-v1 core + API complete. `plumb/core/` (entities, ports, stats, errors) and
-`plumb/api.py` (sync+async decorator + context-manager) shipped with full
-test coverage (≥90%) and performance gates (p95 ≤1ms span overhead, cold
-import ≤200ms). Next: storage adapter (SQLite), CLI, HTTP service, and
-judge adapters to unlock end-to-end integration with atlas.
+v1 core + API + storage adapter complete. `plumb/core/`, `plumb/api.py`,
+`plumb/adapters/` (SQLiteStorageAdapter, FilesystemBlobStore) shipped with
+full test coverage (94% adapters, ≥90% core). Storage layer verified under
+durability (SIGKILL), concurrency (WAL), and performance (p95 ~6 ms run-close)
+gates. Code review findings (12 items) addressed and merged. Ready for
+autocapture, CLI, HTTP, judge slices.
 
 ## Recent (last 7 days)
 
-- v1-core-and-api: all 8 phases complete (Phase 1–7 in dev, Phase 8 docs).
-- Implemented `Run`, `Span`, `Score`, `Example` frozen dataclasses with
-  invariant validation; `Clock`, `IdGenerator`, `StorageWriter`,
-  `StorageReader`, `BlobStore`, `JudgeAdapter` Protocols.
-- `@run` decorator + `with run(...) as r:` for sync + async; `RunHandle`
-  methods (`add_span`, `add_score`, `set_models`, `abort`) fully wired.
-- McNemar's paired test + Benjamini-Hochberg FDR pure-function stats.
-- CI gates: ruff format/check, mypy --strict, pytest with 90% coverage,
-  perf benchmarks, cold import ≤200ms warn / 400ms fail.
+- v1-storage-adapter Phase 7–8 complete: SIGKILL durability verified, run-close
+  p95 ~6 ms (target ≤50 ms), all docs updated, slice archived.
+- Code review (2026-04-27) applied: 5 Important + 7 Minor findings.
+  - I-1: Span tokens asymmetry documented (v2 deferred schema split).
+  - I-2: Example entity field drift fixed (added origin_run_id + rubric).
+  - I-3: Threading.Lock around all StorageWriter methods.
+  - I-4: FR-EDGE-2 sweep tightened (surface invariant violations).
+  - I-5: verify_pragmas wired post apply_pragmas.
+  - M-1..M-7, A-2: Minor cleanups + BlobStore Protocol update.
+- All 340 tests pass; source ruff-clean; 2 deferred-features entries added.
+- Commit: 5e4b72d `fix(storage): Code review findings from v1-storage-adapter review`
 
 ## Next
 
-- Implement v1-storage-adapter: SQLite STRICT tables, WAL mode, foreign
-  keys enforcement; replace in-memory fake with real `StorageWriter`.
 - Implement v1-autocapture: monkey-patch hooks for `anthropic`, `openai`,
   `httpx` SDKs to auto-capture spans.
 - Implement v1-cli: typer commands for `stats`, `serve`, `judge run`.
@@ -42,11 +43,12 @@ judge adapters to unlock end-to-end integration with atlas.
 
 ## Blocked / waiting
 
-- Atlas Day 2 integration is the acceptance signal for plumb v1.0. Unblocked.
+- None. Storage layer is stable and load-bearing for autocapture/CLI/HTTP.
 
 ## Pointers
 
 - PRD: `docs/1_product_and_research/PRD.md`
 - TRD: `docs/2_architecture/TRD.md`
 - SDD: `docs/2_architecture/system_design.md`
-- Active work: `dev/active/`
+- Code review archive: `dev/archive/v1-storage-adapter/v1-storage-adapter-code-review.md`
+- Deferred features: `docs/2_architecture/deferred-features.md`
