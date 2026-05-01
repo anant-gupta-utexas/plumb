@@ -593,7 +593,7 @@ Slice-wide: **≥ 90%** (project gate is 75%; autocapture is testable end-to-end
 | Operation | Budget | Strategy |
 |---|---|---|
 | Patched wrapper overhead (no run open) | ≤ 5 µs | Single contextvar read + bool check, no allocations |
-| Patched wrapper overhead (run open, success path, **wrapper-only**) | ≤ 1 ms | Two `canonicalize_*` calls + sha256 + `add_span`; blob writes excluded — strict NFR-Perf-1 |
+| Patched wrapper overhead (run open, success path, **wrapper-only**) | ≤ 1 ms locally / 3 ms CI | Two `canonicalize_*` calls + sha256 + `add_span`; blob writes excluded — strict NFR-Perf-1 (CI budget wider due to `time.sleep` scheduler jitter) |
 | Patched wrapper overhead (run open, success path, **with real blob store**) | ≤ 5 ms locally / 8 ms CI | Adds 1–2 `FilesystemBlobStore.put` (each ≈ 1 ms p95 due to fsync) — moderate budget |
 | `canonicalize_*` for typical 4-message Anthropic request (~2 KB) | ≤ 200 µs | `json.dumps(sort_keys=True)` is C-implemented; no recursion overhead |
 | `sha256` for 2 KB | ≤ 50 µs | OpenSSL-backed; trivial |
