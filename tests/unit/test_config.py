@@ -124,3 +124,70 @@ def test_ensure_data_dir_uses_default_settings_when_none(
     result = ensure_data_dir(None)
     assert result.name == "default_path"
     get_settings.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# Judge settings (T1.4)
+# ---------------------------------------------------------------------------
+
+
+def test_judge_provider_default_is_none() -> None:
+    s = Settings()
+    assert s.judge_provider is None
+
+
+def test_judge_provider_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLUMB_JUDGE_PROVIDER", "anthropic")
+    s = Settings()
+    assert s.judge_provider == "anthropic"
+
+
+def test_judge_anthropic_api_key_default_is_none() -> None:
+    s = Settings()
+    assert s.judge_anthropic_api_key is None
+
+
+def test_judge_anthropic_api_key_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLUMB_JUDGE_ANTHROPIC_API_KEY", "sk-ant-test")
+    s = Settings()
+    assert s.judge_anthropic_api_key == "sk-ant-test"
+
+
+def test_judge_api_key_default_is_none() -> None:
+    s = Settings()
+    assert s.judge_api_key is None
+
+
+def test_judge_api_key_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLUMB_JUDGE_API_KEY", "sk-openrouter-test")
+    s = Settings()
+    assert s.judge_api_key == "sk-openrouter-test"
+
+
+def test_judge_base_url_default_is_none() -> None:
+    s = Settings()
+    assert s.judge_base_url is None
+
+
+def test_judge_base_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLUMB_JUDGE_BASE_URL", "https://openrouter.ai/api/v1")
+    s = Settings()
+    assert s.judge_base_url == "https://openrouter.ai/api/v1"
+
+
+def test_judge_model_default() -> None:
+    s = Settings()
+    assert s.judge_model == "claude-sonnet-4-6"
+
+
+def test_judge_model_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLUMB_JUDGE_MODEL", "claude-opus-4-5")
+    s = Settings()
+    assert s.judge_model == "claude-opus-4-5"
+
+
+def test_existing_defaults_unchanged() -> None:
+    s = Settings()
+    assert isinstance(s.data_dir, Path)
+    assert s.log_level == "WARNING"
+    assert s.autocapture is True
