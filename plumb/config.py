@@ -17,8 +17,9 @@ class Settings(BaseSettings):
     autocapture: bool = True
 
     # Judge adapter settings (used by `plumb judge run`)
-    judge_provider: str = ""
+    judge_provider: str | None = None
     judge_anthropic_api_key: str | None = None
+    judge_api_key: str | None = None
     judge_base_url: str | None = None
     judge_model: str = "claude-sonnet-4-6"
 
