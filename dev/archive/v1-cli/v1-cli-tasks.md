@@ -3,7 +3,7 @@
 **Feature:** CLI slice (`plumb/cli.py`, `plumb/_time_utils.py`, `plumb/_output.py`)
 **Plan:** [v1-cli-plan.md](./v1-cli-plan.md) | **Context:** [v1-cli-context.md](./v1-cli-context.md)
 
-**Status:** Phase 1 & 2 complete (PR #14). Phase 3 & 4 complete.
+**Status:** ✅ ALL PHASES COMPLETE — Code review findings fixed and merged to main
 
 ---
 

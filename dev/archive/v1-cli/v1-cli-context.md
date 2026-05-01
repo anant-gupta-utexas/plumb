@@ -67,9 +67,11 @@ The ≤ 400 LOC target is tight but achievable if each command is kept to 20–3
 
 Satisfies FR-SCORE-2 (NOT NULL) while being explicit about provenance. Logged at INFO on the first omission per session.
 
-### DR-5: `"no_spans"` sentinel for `example promote` with zero spans
+### DR-5: `sha256(b"no_spans")` sentinel for `example promote` with zero spans
 
-A zero-span run is valid (FR-EDGE-3). The `inputs_hash` column is NOT NULL in the schema. `"no_spans"` is a human-readable sentinel that is not a valid sha256 hex digest, so consumers can distinguish it.
+A zero-span run is valid (FR-EDGE-3). The `inputs_hash` column is NOT NULL in the schema, and `Example.__post_init__` enforces a 64-char lowercase hex string via `_require_hex64`. A literal `"no_spans"` string therefore fails entity validation.
+
+The implementation uses `hashlib.sha256(b"no_spans").hexdigest()` — a deterministic, well-known 64-char hex value (`94a3…`) — as the zero-span sentinel. Consumers who need to identify zero-span promotions should compare `inputs_hash` against this value. This value cannot collide with a real span's `input_hash` in practice (a real sha256 would require constructing a blob whose sha256 is exactly this value).
 
 ### DR-6: `plumb judge run` exits 0 even when individual judge calls fail
 

@@ -74,7 +74,9 @@ def test_serve_keyboard_interrupt_exits_0() -> None:
 
 
 def test_serve_port_in_use_exits_1() -> None:
-    with patch("uvicorn.run", side_effect=OSError("address already in use")):
+    import errno
+
+    with patch("uvicorn.run", side_effect=OSError(errno.EADDRINUSE, "address already in use")):
         result = runner.invoke(app, ["serve", "--port", "8765"])
     assert result.exit_code == 1
     assert "8765" in result.output and "in use" in result.output
@@ -101,3 +103,21 @@ def test_attach_delegates_to_backfill(tmp_path) -> None:
 def test_attach_nonexistent_path_exits_1(tmp_path) -> None:
     result = runner.invoke(app, ["attach", str(tmp_path / "no_such.db")])
     assert result.exit_code != 0
+
+
+def test_attach_storage_error_exits_1(tmp_path) -> None:
+    from unittest.mock import patch
+
+    from plumb.core.errors import StorageError
+
+    fake_db = tmp_path / "agents.db"
+    fake_db.touch()
+
+    with patch(
+        "plumb.adapters.agentsview_attach.backfill",
+        side_effect=StorageError("corrupt schema"),
+    ):
+        result = runner.invoke(app, ["attach", str(fake_db)])
+
+    assert result.exit_code == 1
+    assert "corrupt schema" in result.output

@@ -52,11 +52,10 @@ def test_example_promote_zero_span_run(storage, db_path) -> None:
     with SQLiteStorageAdapter(db_path, clock=_Clock()) as st:
         examples = st.list_examples()
     assert len(examples) == 1
-    # "no_spans" sentinel encoded as sha256 of b"no_spans"
+    # DR-5: inputs_hash must be 64-char hex; zero-span runs use sha256(b"no_spans") as sentinel
     import hashlib
 
-    expected = hashlib.sha256(b"no_spans").hexdigest()
-    assert examples[0].inputs_hash == expected
+    assert examples[0].inputs_hash == hashlib.sha256(b"no_spans").hexdigest()
 
 
 def test_example_promote_uses_highest_token_llm_span(storage, db_path) -> None:
