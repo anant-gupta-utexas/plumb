@@ -20,9 +20,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, TypeVar
-
-_F = TypeVar("_F", bound=Callable[..., Any])
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Exception types
@@ -114,7 +112,7 @@ _WAIT_MAX = 8.0
 _NEVER_RETRY = (KeyboardInterrupt, SystemExit, MemoryError)
 
 
-def with_judge_retry(fn: _F) -> _F:
+def with_judge_retry[F: Callable[..., Any]](fn: F) -> F:
     """Retry *fn* up to 3 attempts on :class:`JudgeTransientError`.
 
     Back-off: exponential with initial=1 s, cap=8 s (``min(2**attempt, 8)``).

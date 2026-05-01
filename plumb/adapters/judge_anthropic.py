@@ -11,14 +11,16 @@ Example usage::
         prompt="Rate this output as pass or fail.",
         prompt_sha="a1b2c3d4",
     )
-    result = judge.score(metric_name="routing_top1", prompt="", content="...", model="claude-sonnet-4-6")
+    result = judge.score(
+        metric_name="routing_top1", prompt="", content="...", model="claude-sonnet-4-6"
+    )
 """
 
 from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from plumb.adapters._judge_common import (
     JudgeFatalError,
@@ -30,9 +32,6 @@ from plumb.adapters._judge_common import (
 )
 from plumb.core.entities import JudgeResult
 from plumb.core.errors import ValidationError
-
-if TYPE_CHECKING:
-    import anthropic as _anthropic_module
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +56,9 @@ class AnthropicJudge:
     Example::
 
         judge = AnthropicJudge(api_key="sk-...", prompt="...", prompt_sha="a1b2c3d4")
-        result = judge.score(metric_name="quality", prompt="", content="hello", model="claude-sonnet-4-6")
+        result = judge.score(
+            metric_name="quality", prompt="", content="hello", model="claude-sonnet-4-6"
+        )
     """
 
     name: str = _PROVIDER
@@ -116,7 +117,9 @@ class AnthropicJudge:
 
         Example::
 
-            result = judge.score(metric_name="quality", prompt="", content="hello", model="claude-sonnet-4-6")
+            result = judge.score(
+                metric_name="quality", prompt="", content="hello", model="claude-sonnet-4-6"
+            )
             assert result.scorer_version.startswith("anthropic:")
         """
         scorer_version = f"{_PROVIDER}:{model}:{self._prompt_sha}"
