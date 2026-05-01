@@ -76,10 +76,7 @@ def redact_headers(headers: Mapping[str, str]) -> dict[str, str]:
         assert safe["Authorization"] == "<redacted>"
         assert safe["Content-Type"] == "json"
     """
-    return {
-        k: "<redacted>" if _SENSITIVE_HEADERS.match(k) else v
-        for k, v in headers.items()
-    }
+    return {k: "<redacted>" if _SENSITIVE_HEADERS.match(k) else v for k, v in headers.items()}
 
 
 def redact_body(text: str) -> str:
@@ -132,6 +129,7 @@ def with_judge_retry[F: Callable[..., Any]](fn: F) -> F:
         def call_api() -> str:
             ...
     """
+
     @wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         last_exc: BaseException | None = None
@@ -143,7 +141,7 @@ def with_judge_retry[F: Callable[..., Any]](fn: F) -> F:
             except JudgeTransientError as exc:
                 last_exc = exc
                 if attempt < _RETRY_ATTEMPTS:
-                    wait = min(_WAIT_MAX, float(2 ** attempt))
+                    wait = min(_WAIT_MAX, float(2**attempt))
                     time.sleep(wait)
         raise last_exc  # type: ignore[misc]
 
