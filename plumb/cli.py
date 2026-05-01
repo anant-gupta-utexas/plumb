@@ -6,19 +6,26 @@ serve, attach, version.
 
 from __future__ import annotations
 
+import errno
 import logging
-import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 import typer
 
+from plumb._cli_judge import register as _register_judge
 from plumb._output import format_output
 from plumb._time_utils import parse_since
 
 logger = logging.getLogger(__name__)
+
+
+class _RealClock:
+    def now(self) -> datetime:
+        return datetime.now(UTC)
+
 
 # ---------------------------------------------------------------------------
 # App + sub-apps
@@ -57,17 +64,13 @@ def _get_storage():  # type: ignore[return]
     from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
     from plumb.config import ensure_data_dir, get_settings
 
-    class _RealClock:
-        def now(self) -> datetime:
-            return datetime.now(UTC)
-
     settings = get_settings()
     data_dir = ensure_data_dir(settings)
     db_path = data_dir / "plumb.db"
     return SQLiteStorageAdapter(db_path, clock=_RealClock())
 
 
-def _die(msg: str) -> None:
+def _die(msg: str) -> NoReturn:
     """Print error to stderr and exit 1."""
     typer.echo(f"Error: {msg}", err=True)
     raise typer.Exit(1)
@@ -116,6 +119,8 @@ def run_stats(
     try:
         with _get_storage() as storage:
             summaries = storage.list_runs_with_counts(since=since_dt, task_id=task_id, limit=limit)
+    except typer.Exit:
+        raise
     except Exception as exc:
         _die(str(exc))
 
@@ -177,7 +182,9 @@ def score_write(
     """
     from plumb.core.entities import Score, ScorerKind
 
-    # XOR validation
+    # XOR validation (also reject empty string label)
+    if value_label is not None and not value_label:
+        _die("--value-label must not be empty.")
     numeric_set = value_numeric is not None
     label_set = value_label is not None
     if numeric_set == label_set:
@@ -211,6 +218,8 @@ def score_write(
                 value_label=value_label,
             )
             storage.write_score(score)
+    except typer.Exit:
+        raise
     except Exception as exc:
         _die(str(exc))
 
@@ -260,11 +269,14 @@ def example_promote(
             else:
                 inputs_hash_str = None
 
-            # Sentinel: "no_spans" encoded as a 64-char hex for schema compliance
-            if inputs_hash_str is None:
-                inputs_hash_final = hashlib.sha256(b"no_spans").hexdigest()
-            else:
-                inputs_hash_final = inputs_hash_str
+            # DR-5: inputs_hash must be 64-char hex per entity validation. Use a
+            # well-known deterministic sentinel for zero-span runs so consumers
+            # can recognise it: sha256(b"no_spans") = 94a3...
+            inputs_hash_final = (
+                inputs_hash_str
+                if inputs_hash_str is not None
+                else hashlib.sha256(b"no_spans").hexdigest()
+            )
 
             example_id = uuid.uuid4().hex
             example = Example(
@@ -278,6 +290,8 @@ def example_promote(
                 origin_run_id=from_run,
             )
             storage.write_example(example)
+    except typer.Exit:
+        raise
     except Exception as exc:
         _die(str(exc))
 
@@ -285,154 +299,10 @@ def example_promote(
 
 
 # ---------------------------------------------------------------------------
-# plumb judge run
+# plumb judge run  (logic lives in plumb/_cli_judge.py per DR-2)
 # ---------------------------------------------------------------------------
 
-_MODEL_HELP = "Model identifier for the judge."
-_METRIC_HELP = "Metric name to evaluate."
-_SINCE_JUDGE_HELP = "Only evaluate runs newer than this."
-_TASK_JUDGE_HELP = "Only evaluate runs with this task_id."
-_DRY_RUN_HELP = "Print count without writing scores."
-
-
-@judge_app.command("run")
-def judge_run(
-    model: Annotated[str, typer.Option("--model", help=_MODEL_HELP)],
-    metric: Annotated[str, typer.Option("--metric", help=_METRIC_HELP)],
-    since: Annotated[str | None, typer.Option("--since", help=_SINCE_JUDGE_HELP)] = None,
-    task_id: Annotated[str | None, typer.Option("--task-id", help=_TASK_JUDGE_HELP)] = None,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help=_DRY_RUN_HELP)] = False,
-) -> None:
-    """Run a batch judge evaluation over un-scored runs.
-
-    Skips runs that already have a score for the given metric.
-    Individual judge failures are recorded as ``value_label='error'`` rows;
-    the command still exits 0 unless the adapter is not configured.
-    """
-    from plumb.core.entities import Score, ScorerKind
-
-    # Guard: reject API-key-shaped model values
-    if re.match(r"^(sk-|anthropic_)", model):
-        _die("--model looks like an API key. Pass the model name, not the key.")
-
-    since_dt = _resolve_since(since)
-
-    # Resolve judge adapter
-    try:
-        from plumb.config import get_settings
-
-        settings = get_settings()
-        provider = getattr(settings, "judge_provider", None)
-        if not provider:
-            _die("PLUMB_JUDGE_PROVIDER is not set. Configure it to use 'plumb judge run'.")
-    except Exception as exc:
-        _die(str(exc))
-
-    # Fetch un-scored runs via raw parameterized query
-    try:
-        with _get_storage() as storage:
-            since_iso = since_dt.isoformat() if since_dt else None
-            db_rows = storage._conn.execute(  # noqa: SLF001
-                """
-                SELECT r.*
-                FROM runs r
-                WHERE
-                    (? IS NULL OR r.start_ts >= ?)
-                    AND (? IS NULL OR r.task_id = ?)
-                    AND NOT EXISTS (
-                        SELECT 1 FROM scores s
-                        WHERE s.run_id = r.run_id AND s.metric_name = ?
-                    )
-                ORDER BY r.start_ts DESC
-                LIMIT 500
-                """,
-                (since_iso, since_iso, task_id, task_id, metric),
-            ).fetchall()
-
-            from plumb.adapters.storage_sqlite import _row_to_run
-
-            runs = [_row_to_run(r) for r in db_rows]
-
-            if dry_run:
-                typer.echo(f"Would judge {len(runs)} run(s) for metric={metric!r}.")
-                return
-
-            if not runs:
-                typer.echo("Nothing to judge.")
-                return
-
-            adapter = _load_judge_adapter(provider, model)
-
-            for run in runs:
-                try:
-                    content = _load_run_content(storage, run.run_id)
-                    result = adapter.score(
-                        metric_name=metric,
-                        prompt="",
-                        content=content,
-                        model=model,
-                    )
-                    score = Score(
-                        score_id=uuid.uuid4().hex,
-                        run_id=run.run_id,
-                        metric_name=metric,
-                        scorer=ScorerKind.JUDGE,
-                        scorer_version=result.scorer_version,
-                        scored_at=datetime.now(UTC),
-                        value_numeric=result.value_numeric,
-                        value_label=result.value_label,
-                    )
-                except Exception as exc:
-                    logger.warning("Judge failed for run %s: %s", run.run_id[:8], exc)
-                    score = Score(
-                        score_id=uuid.uuid4().hex,
-                        run_id=run.run_id,
-                        metric_name=metric,
-                        scorer=ScorerKind.JUDGE,
-                        scorer_version="error",
-                        scored_at=datetime.now(UTC),
-                        value_label="error",
-                    )
-                storage.write_score(score)
-    except typer.Exit:
-        raise
-    except Exception as exc:
-        _die(str(exc))
-
-
-def _load_judge_adapter(provider: str, model: str):  # type: ignore[return]
-    """Instantiate the judge adapter for the given provider string."""
-    # Real adapters land in a future slice; tests inject via monkeypatch.
-    raise NotImplementedError(f"Judge provider {provider!r} not yet implemented.")
-
-
-def _load_run_content(storage, run_id: str) -> str:
-    """Return the primary span's blob content decoded as UTF-8, or '' if absent."""
-    from plumb.core.entities import SpanKind
-
-    try:
-        from plumb.adapters.blobstore_fs import FilesystemBlobStore
-        from plumb.config import ensure_data_dir, get_settings
-
-        blob_store = FilesystemBlobStore(ensure_data_dir(get_settings()))
-    except Exception:
-        return ""
-
-    spans = storage.get_spans_for_run(run_id)
-    llm_spans = [s for s in spans if s.kind == SpanKind.LLM and s.input_hash]
-    if llm_spans:
-        primary = max(llm_spans, key=lambda s: s.tokens_in or 0)
-        target_hash = primary.input_hash
-    elif spans and spans[0].input_hash:
-        target_hash = spans[0].input_hash
-    else:
-        return ""
-
-    try:
-        data = blob_store.get(target_hash)  # type: ignore[arg-type]
-        return data.decode("utf-8", errors="replace")
-    except Exception:
-        return ""
+_register_judge(judge_app, _get_storage, _resolve_since, _die)
 
 
 # ---------------------------------------------------------------------------
@@ -465,7 +335,7 @@ def serve(
     except KeyboardInterrupt:
         raise typer.Exit(0) from None
     except OSError as exc:
-        if "address" in str(exc).lower() or "in use" in str(exc).lower():
+        if exc.errno == errno.EADDRINUSE:
             _die(f"port {port} is already in use.")
         _die(str(exc))
 
@@ -480,7 +350,10 @@ _PATH_HELP = "Path to the AgentsView SQLite database."
 
 @app.command("attach")
 def attach(
-    path: Annotated[Path, typer.Argument(help=_PATH_HELP)],
+    path: Annotated[
+        Path,
+        typer.Argument(help=_PATH_HELP, exists=True, file_okay=True, dir_okay=False, readable=True),
+    ],
     as_name: Annotated[str | None, typer.Option("--as", help=_AS_HELP)] = None,
 ) -> None:
     """Backfill plumb data from a legacy AgentsView SQLite database.
@@ -490,9 +363,6 @@ def attach(
     """
     from plumb.adapters.agentsview_attach import backfill
     from plumb.core.errors import StorageError
-
-    if not path.exists():
-        _die(f"Path {path} does not exist.")
 
     try:
         result = backfill(path, alias=as_name)

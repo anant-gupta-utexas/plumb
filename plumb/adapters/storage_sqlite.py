@@ -536,6 +536,38 @@ class SQLiteStorageAdapter:
         ).fetchall()
         return [_row_to_example(r) for r in rows]
 
+    def list_runs_unscored_for_metric(
+        self,
+        *,
+        metric: str,
+        since: datetime | None = None,
+        task_id: str | None = None,
+        limit: int = 500,
+    ) -> list[Run]:
+        """Return runs that have no score row for the given metric.
+
+        Used by ``plumb judge run`` to find un-judged runs without leaking
+        the internal ``_conn`` or private helpers outside the adapter layer.
+        """
+        since_iso = _dt_to_iso(since)
+        rows = self._conn.execute(  # noqa: S608 — no user values interpolated; all bind via ?
+            """
+            SELECT r.*
+            FROM runs r
+            WHERE
+                (? IS NULL OR r.start_ts >= ?)
+                AND (? IS NULL OR r.task_id = ?)
+                AND NOT EXISTS (
+                    SELECT 1 FROM scores s
+                    WHERE s.run_id = r.run_id AND s.metric_name = ?
+                )
+            ORDER BY r.start_ts DESC
+            LIMIT ?
+            """,
+            (since_iso, since_iso, task_id, task_id, metric, limit),
+        ).fetchall()
+        return [_row_to_run(r) for r in rows]
+
     def list_runs_with_counts(
         self,
         *,

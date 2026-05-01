@@ -22,7 +22,7 @@ def _invoke(db: Path, *args: str, env: dict | None = None):
 
 
 def _patch_adapter(fake: FakeJudgeAdapter):
-    return patch("plumb.cli._load_judge_adapter", return_value=fake)
+    return patch("plumb._cli_judge._load_judge_adapter", return_value=fake)
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +267,7 @@ def test_judge_run_passes_content_from_span(storage, db_path) -> None:
     storage.close()
 
     fake = FakeJudgeAdapter(value_label="pass")
-    with _patch_adapter(fake), patch("plumb.cli._load_run_content", return_value="test content"):
+    with _patch_adapter(fake), patch("plumb._cli_judge._load_run_content", return_value="test content"):
         result = _invoke(db_path, "--model", "gpt-4o", "--metric", "quality")
 
     assert result.exit_code == 0, result.output
