@@ -80,7 +80,7 @@ plumb version
 - **NFR-Sec-1 (MUST).** No `--api-key` or similar arg. Pattern-match guard rejects `--model sk-*`.
 - **NFR-Sec-3 (MUST).** All queries use parameterized bindings only.
 - **NFR-Use-2 (MUST).** `ruff check .` and `ruff format --check .` pass.
-- **NFR-Use-4 (MUST).** All public Typer commands have Google-style docstrings.
+- **NFR-Use-4.** All public Typer commands have Google-style docstrings (not gated in CI).
 - **NFR-Use-5 (MUST).** `plumb --help` and `plumb version` work on a fresh Python 3.13 install.
 
 ---

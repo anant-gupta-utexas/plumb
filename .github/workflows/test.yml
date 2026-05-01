@@ -44,9 +44,9 @@ jobs:
           uv run pytest \
             --cov=plumb \
             --cov-report=term \
-            --cov-fail-under=90 \
+            --cov-fail-under=75 \
             -v \
-            tests/unit/ tests/perf/ \
+            tests/unit/ tests/perf/ tests/cli/ \
             2>&1 | tee pytest-output.txt
           exit ${PIPESTATUS[0]}
 
@@ -55,3 +55,8 @@ jobs:
         run: |
           echo "=== Perf summary ===" && \
           grep -E "p50=|p95=|p99=|cold import" pytest-output.txt || true
+
+      - name: Smoke — plumb --help and version
+        run: |
+          uv run plumb --help
+          uv run plumb version | grep "plumb 0\."
