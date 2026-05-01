@@ -3,6 +3,8 @@
 **Feature:** CLI slice (`plumb/cli.py`, `plumb/_time_utils.py`, `plumb/_output.py`)
 **Plan:** [v1-cli-plan.md](./v1-cli-plan.md) | **Context:** [v1-cli-context.md](./v1-cli-context.md)
 
+**Status:** Phase 1 & 2 complete (PR #14). Phase 3 & 4 pending.
+
 ---
 
 ## Phase 1 — Scaffolding + `plumb version` + `plumb run stats`
@@ -14,10 +16,10 @@
 **Description:** Add `plumb/cli.py` with the Typer app + sub-app structure. Register `plumb = "plumb.cli:app"` in `pyproject.toml [project.scripts]`. Implement `plumb version`.
 
 **Acceptance Criteria:**
-- [ ] `plumb --help` lists all sub-apps (`run`, `score`, `example`, `judge`) plus `serve`, `attach`, `version`.
-- [ ] `plumb version` prints `plumb 0.1.0` and exits 0.
-- [ ] `ruff check .` passes with new file.
-- [ ] Google-style docstring on every command function (for `interrogate` gate).
+- [x] `plumb --help` lists all sub-apps (`run`, `score`, `example`, `judge`) plus `serve`, `attach`, `version`.
+- [x] `plumb version` prints `plumb 0.1.0` and exits 0.
+- [x] `ruff check .` passes with new file.
+- [x] Google-style docstring on every command function (for `interrogate` gate).
 
 **Files:**
 - `plumb/cli.py` — new (skeleton + `version` command)
@@ -34,14 +36,14 @@
 **Description:** Implement `parse_since` per plan §3.4 + §6.1.
 
 **Acceptance Criteria:**
-- [ ] `parse_since("7d")` → `now_utc() - timedelta(days=7)` (UTC-aware).
-- [ ] `parse_since("2w")` → `now_utc() - timedelta(weeks=2)`.
-- [ ] `parse_since("1h")` → `now_utc() - timedelta(hours=1)`.
-- [ ] `parse_since("30m")` → `now_utc() - timedelta(minutes=30)`.
-- [ ] `parse_since("2026-01-01")` parses as UTC midnight (naive ISO coerced to UTC).
-- [ ] `parse_since("2026-01-01T00:00:00+05:30")` preserves timezone.
-- [ ] `parse_since("foobar")` raises `ValueError`.
-- [ ] `parse_since("0d")` raises `ValueError` (zero not allowed).
+- [x] `parse_since("7d")` → `now_utc() - timedelta(days=7)` (UTC-aware).
+- [x] `parse_since("2w")` → `now_utc() - timedelta(weeks=2)`.
+- [x] `parse_since("1h")` → `now_utc() - timedelta(hours=1)`.
+- [x] `parse_since("30m")` → `now_utc() - timedelta(minutes=30)`.
+- [x] `parse_since("2026-01-01")` parses as UTC midnight (naive ISO coerced to UTC).
+- [x] `parse_since("2026-01-01T00:00:00+05:30")` preserves timezone.
+- [x] `parse_since("foobar")` raises `ValueError`.
+- [x] `parse_since("0d")` raises `ValueError` (zero not allowed).
 
 **Files:**
 - `plumb/_time_utils.py` — new
@@ -58,12 +60,12 @@
 **Description:** Implement `is_tty`, `print_table`, `print_json`, `print_csv`, `format_output` per plan §3.5 + §6.2. Resolve PD-1 (rich-only vs. tabulate fallback) before starting.
 
 **Acceptance Criteria:**
-- [ ] `format_output(rows, cols, "json")` → valid newline-delimited JSON (one object per line).
-- [ ] `format_output(rows, cols, "table")` when `is_tty() = False` → falls back to `"json"`.
-- [ ] `format_output(rows, cols, "csv")` → CSV with header row matching `columns`.
-- [ ] `format_output(rows, cols, "xml")` → `ValueError`.
-- [ ] `print_table` renders with `rich.Table` when `rich` is available.
-- [ ] Empty rows list: all formats produce valid empty output (no crash).
+- [x] `format_output(rows, cols, "json")` → valid newline-delimited JSON (one object per line).
+- [x] `format_output(rows, cols, "table")` when `is_tty() = False` → falls back to `"json"`.
+- [x] `format_output(rows, cols, "csv")` → CSV with header row matching `columns`.
+- [x] `format_output(rows, cols, "xml")` → `ValueError`.
+- [x] `print_table` renders with `rich.Table` when `rich` is available.
+- [x] Empty rows list: all formats produce valid empty output (no crash).
 
 **Files:**
 - `plumb/_output.py` — new
@@ -80,16 +82,16 @@
 **Description:** Wire `run_stats` command using the JOIN query from plan §5.1, `parse_since`, and `format_output`.
 
 **Acceptance Criteria:**
-- [ ] `plumb run stats` against empty DB exits 0 (empty output, no crash).
-- [ ] `plumb run stats` lists runs with correct `span_count` and `score_count` columns.
-- [ ] `--since 7d` filters out runs older than 7 days.
-- [ ] `--task-id foo` filters to only `task_id='foo'` rows.
-- [ ] `--format json` outputs newline-delimited JSON.
-- [ ] `--format csv` outputs CSV with header.
-- [ ] `--limit 5` returns at most 5 rows.
-- [ ] Invalid `--since foo` exits 1 with message containing `"Invalid --since"`.
-- [ ] Invalid `--format xml` exits 1 with message containing `"table, json, or csv"`.
-- [ ] All SQL bindings are parameterized (verified by `ruff S608`).
+- [x] `plumb run stats` against empty DB exits 0 (empty output, no crash).
+- [x] `plumb run stats` lists runs with correct `span_count` and `score_count` columns.
+- [x] `--since 7d` filters out runs older than 7 days.
+- [x] `--task-id foo` filters to only `task_id='foo'` rows.
+- [x] `--format json` outputs newline-delimited JSON.
+- [x] `--format csv` outputs CSV with header.
+- [x] `--limit 5` returns at most 5 rows.
+- [x] Invalid `--since foo` exits 1 with message containing `"Invalid --since"`.
+- [x] Invalid `--format xml` exits 1 with message containing `"table, json, or csv"`.
+- [x] All SQL bindings are parameterized (verified by `ruff S608`).
 
 **Files:**
 - `plumb/cli.py` — implement `run_stats`
@@ -100,9 +102,9 @@
 **Tests:** Unit + integration (real `SQLiteStorageAdapter` via `tmp_path`).
 
 **Phase 1 Deliverables:**
-- [ ] `plumb --help` and `plumb version` work.
-- [ ] `plumb run stats` is fully functional with all filters and format options.
-- [ ] `parse_since` and `_output` helpers unit-tested independently.
+- [x] `plumb --help` and `plumb version` work.
+- [x] `plumb run stats` is fully functional with all filters and format options.
+- [x] `parse_since` and `_output` helpers unit-tested independently.
 
 ---
 
@@ -115,14 +117,14 @@
 **Description:** Wire `score_write` per plan §3.3 — XOR validation, run-existence check, `write_score` call.
 
 **Acceptance Criteria:**
-- [ ] Writes numeric score row; `plumb run stats` shows score_count incremented.
-- [ ] Writes label score row.
-- [ ] `--value-numeric 1.0 --value-label pass` → exit 1 + `"Exactly one of"` message.
-- [ ] Neither flag → exit 1 + same message.
-- [ ] Unknown `--run-id` → exit 1 + `"not found"` in message.
-- [ ] Invalid `--scorer xyz` → exit 1 + valid scorer kinds listed.
-- [ ] Omitted `--scorer-version` → DB row has `scorer_version = "cli-unversioned"`.
-- [ ] `--span-id` (optional) stored on score row when provided.
+- [x] Writes numeric score row; `plumb run stats` shows score_count incremented.
+- [x] Writes label score row.
+- [x] `--value-numeric 1.0 --value-label pass` → exit 1 + `"Exactly one of"` message.
+- [x] Neither flag → exit 1 + same message.
+- [x] Unknown `--run-id` → exit 1 + `"not found"` in message.
+- [x] Invalid `--scorer xyz` → exit 1 + valid scorer kinds listed.
+- [x] Omitted `--scorer-version` → DB row has `scorer_version = "cli-unversioned"`.
+- [x] `--span-id` (optional) stored on score row when provided.
 
 **Files:**
 - `plumb/cli.py` — implement `score_write`
@@ -139,15 +141,15 @@
 **Description:** Wire `example_promote` per plan §3.3 + §6.4. Input hash selection per plan §5.3.
 
 **Acceptance Criteria:**
-- [ ] Creates `examples` row with `source='production_promotion'`, `origin_run_id` = provided run.
-- [ ] `active = 1` on new example row.
-- [ ] `--rubric path/to/rubric.md` content stored verbatim in `examples.rubric`.
-- [ ] Unknown `--from-run` → exit 1 + `"not found"` message.
-- [ ] Zero-span run → `inputs_hash = "no_spans"`.
-- [ ] Single LLM span with `input_hash` → that hash used.
-- [ ] Multiple LLM spans → span with highest `tokens_in` wins.
-- [ ] No LLM spans but other span kinds present → first span's `input_hash` used.
-- [ ] Promoted example prints `"Promoted run {8 chars} → example {8 chars}"`.
+- [x] Creates `examples` row with `source='production_promotion'`, `origin_run_id` = provided run.
+- [x] `active = 1` on new example row.
+- [x] `--rubric path/to/rubric.md` content stored verbatim in `examples.rubric`.
+- [x] Unknown `--from-run` → exit 1 + `"not found"` message.
+- [x] Zero-span run → `inputs_hash = "no_spans"`.
+- [x] Single LLM span with `input_hash` → that hash used.
+- [x] Multiple LLM spans → span with highest `tokens_in` wins.
+- [x] No LLM spans but other span kinds present → first span's `input_hash` used.
+- [x] Promoted example prints `"Promoted run {8 chars} → example {8 chars}"`.
 
 **Files:**
 - `plumb/cli.py` — implement `example_promote`
@@ -158,8 +160,8 @@
 **Tests:** Unit + integration.
 
 **Phase 2 Deliverables:**
-- [ ] Human reviewers can write scores via `plumb score write` without Python.
-- [ ] Production runs can be promoted to the regression dataset via `plumb example promote`.
+- [x] Human reviewers can write scores via `plumb score write` without Python.
+- [x] Production runs can be promoted to the regression dataset via `plumb example promote`.
 
 ---
 

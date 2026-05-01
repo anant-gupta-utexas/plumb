@@ -28,6 +28,36 @@ from plumb.core.entities import (
 from plumb.core.errors import StorageError, ValidationError
 from plumb.core.ports import Clock
 
+# ---------------------------------------------------------------------------
+# RunSummary — lightweight projection for plumb run stats (CLI)
+# ---------------------------------------------------------------------------
+
+
+class RunSummary:
+    """A run row augmented with span and score counts (for plumb run stats)."""
+
+    __slots__ = (
+        "run_id",
+        "task_id",
+        "kind",
+        "status",
+        "start_ts",
+        "end_ts",
+        "span_count",
+        "score_count",
+    )
+
+    def __init__(self, row: sqlite3.Row) -> None:
+        self.run_id: str = row["run_id"]
+        self.task_id: str = row["task_id"]
+        self.kind: str = row["kind"]
+        self.status: str = row["status"]
+        self.start_ts: str = row["start_ts"]
+        self.end_ts: str | None = row["end_ts"]
+        self.span_count: int = row["span_count"]
+        self.score_count: int = row["score_count"]
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -505,6 +535,39 @@ class SQLiteStorageAdapter:
             params,
         ).fetchall()
         return [_row_to_example(r) for r in rows]
+
+    def list_runs_with_counts(
+        self,
+        *,
+        since: datetime | None = None,
+        task_id: str | None = None,
+        limit: int = 100,
+    ) -> list[RunSummary]:
+        """Return runs with span and score counts (used by ``plumb run stats``).
+
+        All filtering is done via parameterized bindings; no dynamic SQL predicates
+        are string-interpolated with user values.
+        """
+        since_iso = _dt_to_iso(since)
+        rows = self._conn.execute(  # noqa: S608 — no user values interpolated; all bind via ?
+            """
+            SELECT
+                r.run_id, r.task_id, r.kind, r.status, r.start_ts, r.end_ts,
+                COUNT(DISTINCT s.span_id)   AS span_count,
+                COUNT(DISTINCT sc.score_id) AS score_count
+            FROM runs r
+            LEFT JOIN spans  s  ON s.run_id  = r.run_id
+            LEFT JOIN scores sc ON sc.run_id = r.run_id
+            WHERE
+                (? IS NULL OR r.start_ts >= ?)
+                AND (? IS NULL OR r.task_id = ?)
+            GROUP BY r.run_id
+            ORDER BY r.start_ts DESC
+            LIMIT ?
+            """,
+            (since_iso, since_iso, task_id, task_id, limit),
+        ).fetchall()
+        return [RunSummary(r) for r in rows]
 
     # -------------------------------------------------------------------------
     # Lifecycle
