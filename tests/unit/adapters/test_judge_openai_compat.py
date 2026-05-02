@@ -5,14 +5,17 @@ from __future__ import annotations
 import logging
 import socket
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
+
+if TYPE_CHECKING:
+    import openai
 
 import pytest
 
 from plumb.adapters.judge_openai_compat import OpenAICompatibleJudge
 from plumb.core.entities import JudgeResult
 from plumb.core.errors import ValidationError
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -63,7 +66,7 @@ def _make_judge(
     )
 
 
-def _make_api_status_error(status_code: int, body: str = "") -> "openai.APIStatusError":
+def _make_api_status_error(status_code: int, body: str = "") -> openai.APIStatusError:
     import httpx
     import openai
 
@@ -94,9 +97,7 @@ def test_rejects_empty_prompt_sha() -> None:
 
 def test_accepts_injected_client() -> None:
     client = MagicMock()
-    judge = OpenAICompatibleJudge(
-        api_key="sk-test", prompt="p", prompt_sha="sha", client=client
-    )
+    judge = OpenAICompatibleJudge(api_key="sk-test", prompt="p", prompt_sha="sha", client=client)
     assert judge._client is client
 
 
@@ -175,9 +176,7 @@ def test_happy_path_scorer_version() -> None:
 
 def test_happy_path_tokens_from_usage() -> None:
     client = MagicMock()
-    client.chat.completions.create.return_value = _make_response(
-        tokens_in=42, tokens_out=7
-    )
+    client.chat.completions.create.return_value = _make_response(tokens_in=42, tokens_out=7)
     judge = _make_judge(client)
 
     with patch("time.sleep"):
@@ -244,7 +243,7 @@ def test_numeric_verdict_returned() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_rate_limit_error() -> "openai.RateLimitError":
+def _make_rate_limit_error() -> openai.RateLimitError:
     import httpx
     import openai
 
@@ -425,9 +424,8 @@ def test_api_key_in_error_is_redacted_in_result(caplog: pytest.LogCaptureFixture
     client.chat.completions.create.side_effect = exc
     judge = _make_judge(client)
 
-    with caplog.at_level(logging.WARNING):
-        with patch("time.sleep"):
-            result = judge.score(metric_name="m", prompt="", content="c", model="model")
+    with caplog.at_level(logging.WARNING), patch("time.sleep"):
+        result = judge.score(metric_name="m", prompt="", content="c", model="model")
 
     assert "sk-abc12345abcde" not in result.rationale
     assert "<redacted>" in result.rationale
@@ -445,9 +443,8 @@ def test_warning_emitted_once_per_fail_open(caplog: pytest.LogCaptureFixture) ->
     client.chat.completions.create.side_effect = _make_rate_limit_error()
     judge = _make_judge(client)
 
-    with caplog.at_level(logging.WARNING):
-        with patch("time.sleep"):
-            judge.score(metric_name="m", prompt="", content="c", model="model")
+    with caplog.at_level(logging.WARNING), patch("time.sleep"):
+        judge.score(metric_name="m", prompt="", content="c", model="model")
 
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1
@@ -475,9 +472,7 @@ def test_base_url_forwarded_to_openai_sdk() -> None:
         with patch("time.sleep"):
             judge.score(metric_name="m", prompt="", content="c", model="model")
 
-    mock_cls.assert_called_once_with(
-        api_key="tok-abc", base_url="https://openrouter.ai/api/v1"
-    )
+    mock_cls.assert_called_once_with(api_key="tok-abc", base_url="https://openrouter.ai/api/v1")
 
 
 def test_no_base_url_does_not_pass_base_url_kwarg() -> None:

@@ -10,7 +10,6 @@ import pytest
 from plumb._prompt_loader import load_prompt
 from plumb.core.errors import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------

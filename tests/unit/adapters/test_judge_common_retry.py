@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import time
-from unittest.mock import call, patch
+from unittest.mock import patch
 
 import pytest
 
 from plumb.adapters._judge_common import JudgeFatalError, JudgeTransientError, with_judge_retry
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -75,9 +73,8 @@ def test_reraises_after_three_transient_failures() -> None:
     def fn() -> None:
         raise JudgeTransientError("always fails")
 
-    with patch("time.sleep"):
-        with pytest.raises(JudgeTransientError):
-            fn()
+    with patch("time.sleep"), pytest.raises(JudgeTransientError):
+        fn()
 
 
 def test_sdk_invoked_three_times_on_transient_failure() -> None:
@@ -89,9 +86,8 @@ def test_sdk_invoked_three_times_on_transient_failure() -> None:
         call_count += 1
         raise JudgeTransientError("x")
 
-    with patch("time.sleep"):
-        with pytest.raises(JudgeTransientError):
-            fn()
+    with patch("time.sleep"), pytest.raises(JudgeTransientError):
+        fn()
 
     assert call_count == 3
 
@@ -101,9 +97,8 @@ def test_sleep_called_exactly_twice_on_three_failures() -> None:
     def fn() -> None:
         raise JudgeTransientError("x")
 
-    with patch("time.sleep") as mock_sleep:
-        with pytest.raises(JudgeTransientError):
-            fn()
+    with patch("time.sleep") as mock_sleep, pytest.raises(JudgeTransientError):
+        fn()
 
     assert mock_sleep.call_count == 2
 
@@ -114,9 +109,11 @@ def test_sleep_durations_monotonically_nondecreasing() -> None:
         raise JudgeTransientError("x")
 
     sleep_args: list[float] = []
-    with patch("time.sleep", side_effect=lambda s: sleep_args.append(s)):
-        with pytest.raises(JudgeTransientError):
-            fn()
+    with (
+        patch("time.sleep", side_effect=lambda s: sleep_args.append(s)),
+        pytest.raises(JudgeTransientError),
+    ):
+        fn()
 
     assert len(sleep_args) == 2
     assert sleep_args[0] <= sleep_args[1]
@@ -128,9 +125,11 @@ def test_sleep_durations_within_bounds() -> None:
         raise JudgeTransientError("x")
 
     sleep_args: list[float] = []
-    with patch("time.sleep", side_effect=lambda s: sleep_args.append(s)):
-        with pytest.raises(JudgeTransientError):
-            fn()
+    with (
+        patch("time.sleep", side_effect=lambda s: sleep_args.append(s)),
+        pytest.raises(JudgeTransientError),
+    ):
+        fn()
 
     for s in sleep_args:
         assert 1.0 <= s <= 8.0
@@ -150,9 +149,8 @@ def test_fatal_error_not_retried() -> None:
         call_count += 1
         raise JudgeFatalError("bad request")
 
-    with patch("time.sleep") as mock_sleep:
-        with pytest.raises(JudgeFatalError):
-            fn()
+    with patch("time.sleep") as mock_sleep, pytest.raises(JudgeFatalError):
+        fn()
 
     assert call_count == 1
     mock_sleep.assert_not_called()
@@ -173,9 +171,8 @@ def test_never_retry_exceptions_propagate(exc_type: type[BaseException]) -> None
         call_count += 1
         raise exc_type("stop")
 
-    with patch("time.sleep") as mock_sleep:
-        with pytest.raises(exc_type):
-            fn()
+    with patch("time.sleep") as mock_sleep, pytest.raises(exc_type):
+        fn()
 
     assert call_count == 1
     mock_sleep.assert_not_called()

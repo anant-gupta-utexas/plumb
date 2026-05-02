@@ -174,6 +174,64 @@ Set them in a `.env` file or export them before running your code. Settings are 
 
 ---
 
+## Running a judge
+
+plumb can score recorded runs with an LLM judge. Set `PLUMB_JUDGE_PROVIDER` to
+`anthropic` or `openai_compat`, place a prompt file in
+`$PLUMB_DATA_DIR/judge_prompts/<metric_name>.md`, then run:
+
+```bash
+plumb judge run --metric routing_top1 --model claude-sonnet-4-6
+```
+
+### Anthropic (native SDK)
+
+```bash
+export PLUMB_JUDGE_PROVIDER=anthropic
+export PLUMB_JUDGE_ANTHROPIC_API_KEY=sk-ant-...
+export PLUMB_DATA_DIR=~/.plumb   # judge_prompts/ lives here
+
+# Place your prompt:
+mkdir -p ~/.plumb/judge_prompts
+cat > ~/.plumb/judge_prompts/routing_top1.md <<'EOF'
+You are an evaluator. Given the run output below, respond with JSON:
+{"verdict": "pass" or "fail", "rationale": "<one sentence>"}
+EOF
+
+plumb judge run --metric routing_top1 --model claude-sonnet-4-6
+```
+
+### OpenAI-compatible (OpenAI / OpenRouter / Ollama / vLLM / LiteLLM)
+
+```bash
+export PLUMB_JUDGE_PROVIDER=openai_compat
+export PLUMB_JUDGE_API_KEY=sk-...
+export PLUMB_JUDGE_BASE_URL=https://openrouter.ai/api/v1  # omit for api.openai.com
+
+plumb judge run --metric routing_top1 --model gpt-4o
+```
+
+### Prompt file convention
+
+- Location: `$PLUMB_DATA_DIR/judge_prompts/<metric_name>.md`
+- Content: plain text / Markdown system prompt; no special syntax required.
+- Verdict contract: the model **must** reply with valid JSON containing
+  `"verdict"` (`"pass"`, `"fail"`, or a float 0–1) and `"rationale"`.
+- Fail-open: if the model errors or returns malformed JSON, plumb writes a
+  score row with `value_label="error"` and exits 0. No run data is lost.
+
+### Judge env vars
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PLUMB_JUDGE_PROVIDER` | *(required)* | `anthropic` or `openai_compat` |
+| `PLUMB_JUDGE_ANTHROPIC_API_KEY` | `None` | API key for `provider=anthropic` |
+| `PLUMB_JUDGE_API_KEY` | `None` | API key for `provider=openai_compat` |
+| `PLUMB_JUDGE_BASE_URL` | `None` | Base URL override (OpenRouter, Ollama, …) |
+| `PLUMB_JUDGE_MODEL` | `claude-sonnet-4-6` | Default model (overridable via `--model`) |
+
+---
+
 ## Run the local HTTP service (optional)
 
 plumb ships a read-only HTTP service useful for querying recorded runs from notebooks or ad-hoc scripts:

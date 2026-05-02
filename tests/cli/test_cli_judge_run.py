@@ -267,7 +267,11 @@ def test_judge_run_passes_content_from_span(storage, db_path) -> None:
     storage.close()
 
     fake = FakeJudgeAdapter(value_label="pass")
-    with _patch_adapter(fake), patch("plumb._cli_judge._load_run_content", return_value="test content"):
+    return_value = "test content"
+    with (
+        _patch_adapter(fake),
+        patch("plumb._cli_judge._load_run_content", return_value=return_value),
+    ):
         result = _invoke(db_path, "--model", "gpt-4o", "--metric", "quality")
 
     assert result.exit_code == 0, result.output

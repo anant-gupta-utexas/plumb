@@ -299,4 +299,82 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ---
 
+### v1.1 — Per-metric model env overrides
+
+- **Decision:** deferred to v1.1
+- **Date:** 2026-05-01
+- **Context:** `PLUMB_JUDGE_MODEL` sets a single global default. High-value metrics (e.g. plan-vs-execution) may benefit from Opus; cheap binary metrics can use Haiku. Users currently override with `--model` on every CLI invocation.
+- **Options considered:**
+  - *v1 inclusion* — `PLUMB_JUDGE_MODEL_<METRIC_NAME>` env var cascade. Con: env-var proliferation; complicates `get_judge_adapter` logic before the factory is proven in production.
+  - **v1.1 (chosen)** — add optional per-metric model key to `Settings` once usage patterns emerge.
+- **Rationale for current pick:** `--model` flag covers the v1 need. Override pattern design is easier once real usage data is available.
+- **Revisit trigger:** First user request or when `plumb judge run` is called in a multi-metric pipeline.
+
+---
+
+### v1.1 — Concurrent judge calls
+
+- **Decision:** deferred to v1.1
+- **Date:** 2026-05-01
+- **Context:** `plumb judge run` currently judges runs sequentially. With large backlogs the wall-clock time is dominated by per-call latency.
+- **Options considered:**
+  - *v1 inclusion* — `asyncio.gather` / `concurrent.futures.ThreadPoolExecutor`. Con: complicates the fail-open path and progress reporting; rate-limit retries interact poorly with concurrency without a semaphore.
+  - **v1.1 (chosen)** — add `--concurrency N` flag backed by a thread pool after the sequential path is proven.
+- **Rationale for current pick:** Sequential is correct and simple; concurrency is an optimization. PRD §8 doesn't require throughput targets for the judge path.
+- **Revisit trigger:** `plumb judge run` wall-clock time exceeds 5 minutes for a typical 200-run backlog.
+
+---
+
+### v1.1 — File-backed prompt edit UX
+
+- **Decision:** deferred to v1.1
+- **Date:** 2026-05-01
+- **Context:** Users manage prompt files in `$PLUMB_DATA_DIR/judge_prompts/` manually. There is no CLI to create, list, or validate prompts.
+- **Options considered:**
+  - *v1 inclusion* — `plumb judge prompt create <name>`, `list`, `show`. Con: adds surface before the prompt format is stable.
+  - **v1.1 (chosen)** — ship after observing how users organize their prompts in practice.
+- **Rationale for current pick:** File management is solved by `cat` and `$EDITOR`; no blocking use case in v1.
+- **Revisit trigger:** User confusion about where prompt files live or how to version them.
+
+---
+
+### v2 — Streaming verdicts
+
+- **Decision:** deferred to v2
+- **Date:** 2026-05-01
+- **Context:** Both the Anthropic and OpenAI adapters use blocking `messages.create` / `chat.completions.create`. Streaming would reduce time-to-first-token for long rationales.
+- **Options considered:**
+  - *v1 inclusion* — Con: streaming complicates JSON parsing (need to accumulate chunks before `parse_reply`); fail-open logic interacts with partial streams.
+  - **v2 (chosen)** — judges are batch by design in v1 (one prompt → one verdict); streaming rationale is an optimization for interactive use cases that don't exist yet.
+- **Rationale for current pick:** Batch is correct for the CI-gate and offline scoring use cases. PRD §8 does not require streaming.
+- **Revisit trigger:** Interactive judge UX request where streaming rationale improves UX.
+
+---
+
+### v2 — Tool-use judges (CLI-style)
+
+- **Decision:** deferred to v2 (see also "Agentic-CLI-backed judge adapter" in Group A)
+- **Date:** 2026-05-01
+- **Context:** Some evaluation tasks (e.g. "did the agent correctly call tool X?") benefit from a judge that can itself call tools or execute code. v1 judges are stateless `(prompt, content) → verdict`.
+- **Options considered:**
+  - *v1 inclusion* — Con: tool-use judges are non-deterministic (see Group A "Agentic-CLI" entry); `scorer_version` drift detection breaks.
+  - **v2 (chosen)** — requires a stable, versioned, stateless judging mode and the Protocol/ABC extension seam from Group A.
+- **Rationale for current pick:** Stateless judges are a prerequisite for drift detection. Tool-use changes the judging contract fundamentally.
+- **Revisit trigger:** First use case where a binary pass/fail verdict requires external tool verification (e.g. "run this code and check the output").
+
+---
+
+### v2 — Multi-judge consensus / ensembling
+
+- **Decision:** deferred to v2
+- **Date:** 2026-05-01
+- **Context:** Running the same metric through multiple providers and taking a majority vote reduces variance. Galileo uses an ensemble of judges for their quality metrics.
+- **Options considered:**
+  - *v1 inclusion* — Con: doubles/triples cost; `scorer_version` encoding becomes a list; `write_score` would need a consensus aggregation step.
+  - **v2 (chosen)** — single-judge verdict is sufficient for v1 regression gate use case.
+- **Rationale for current pick:** Ensemble adds cost and schema complexity before anyone has measured single-judge variance on their actual data.
+- **Revisit trigger:** First user request showing systematic single-judge disagreement with human labels (Krippendorff's α < 0.7) that ensembling would fix.
+
+---
+
 *End of backlog. Append new entries at the bottom of the appropriate group.*

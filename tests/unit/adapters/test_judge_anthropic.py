@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import logging
-import re
 import socket
 from types import SimpleNamespace
-from unittest.mock import MagicMock, call, patch
+from typing import TYPE_CHECKING
+from unittest.mock import MagicMock, patch
+
+if TYPE_CHECKING:
+    import anthropic
 
 import pytest
 
 from plumb.adapters.judge_anthropic import AnthropicJudge
 from plumb.core.entities import JudgeResult
 from plumb.core.errors import ValidationError
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -133,9 +135,7 @@ def test_happy_path_scorer_version() -> None:
     judge = _make_judge(client)
 
     with patch("time.sleep"):
-        result = judge.score(
-            metric_name="m", prompt="", content="c", model="claude-sonnet-4-6"
-        )
+        result = judge.score(metric_name="m", prompt="", content="c", model="claude-sonnet-4-6")
 
     assert result.scorer_version == "anthropic:claude-sonnet-4-6:a1b2c3d4"
 
@@ -267,9 +267,7 @@ def test_rate_limit_three_times_fail_open() -> None:
     import anthropic
 
     client = MagicMock()
-    client.messages.create.side_effect = anthropic.RateLimitError.__new__(
-        anthropic.RateLimitError
-    )
+    client.messages.create.side_effect = anthropic.RateLimitError.__new__(anthropic.RateLimitError)
     judge = _make_judge(client)
 
     with patch("time.sleep"):
@@ -298,7 +296,7 @@ def test_fail_open_rationale_truncated_to_500_chars() -> None:
     assert len(result.rationale) <= 500
 
 
-def _make_api_status_error(status_code: int, body: str = "") -> "anthropic.APIStatusError":
+def _make_api_status_error(status_code: int, body: str = "") -> anthropic.APIStatusError:
     import anthropic
     import httpx
 
@@ -405,9 +403,8 @@ def test_api_key_in_error_is_redacted_in_result(caplog: pytest.LogCaptureFixture
     client.messages.create.side_effect = exc
     judge = _make_judge(client)
 
-    with caplog.at_level(logging.WARNING):
-        with patch("time.sleep"):
-            result = judge.score(metric_name="m", prompt="", content="c", model="model")
+    with caplog.at_level(logging.WARNING), patch("time.sleep"):
+        result = judge.score(metric_name="m", prompt="", content="c", model="model")
 
     assert "sk-abc12345abcde" not in result.rationale
     assert "<redacted>" in result.rationale
@@ -424,14 +421,11 @@ def test_warning_emitted_once_per_fail_open(caplog: pytest.LogCaptureFixture) ->
     import anthropic
 
     client = MagicMock()
-    client.messages.create.side_effect = anthropic.RateLimitError.__new__(
-        anthropic.RateLimitError
-    )
+    client.messages.create.side_effect = anthropic.RateLimitError.__new__(anthropic.RateLimitError)
     judge = _make_judge(client)
 
-    with caplog.at_level(logging.WARNING):
-        with patch("time.sleep"):
-            judge.score(metric_name="m", prompt="", content="c", model="model")
+    with caplog.at_level(logging.WARNING), patch("time.sleep"):
+        judge.score(metric_name="m", prompt="", content="c", model="model")
 
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1
@@ -445,7 +439,6 @@ def test_warning_emitted_once_per_fail_open(caplog: pytest.LogCaptureFixture) ->
 def test_no_real_network_connect_called(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure socket.connect is never reached; mock client used."""
     connected: list[object] = []
-    original_connect = socket.socket.connect
 
     def fake_connect(self: socket.socket, *args: object) -> None:
         connected.append(args)

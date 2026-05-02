@@ -7,12 +7,9 @@ a mixed (label + numeric) state — it either returns exactly one set, or raises
 from __future__ import annotations
 
 import pytest
-from hypothesis import given
-from hypothesis import settings as h_settings
-from hypothesis import strategies as st
+from hypothesis import given, settings as h_settings, strategies as st
 
 from plumb.adapters._judge_common import parse_reply
-
 
 # ---------------------------------------------------------------------------
 # Happy paths
@@ -69,9 +66,7 @@ def test_parse_code_fenced_no_lang_tag() -> None:
 
 def test_parse_rationale_truncated_to_1000_chars() -> None:
     long_rationale = "x" * 2000
-    label, num, rationale = parse_reply(
-        f'{{"verdict":"pass","rationale":"{long_rationale}"}}'
-    )
+    label, num, rationale = parse_reply(f'{{"verdict":"pass","rationale":"{long_rationale}"}}')
     assert len(rationale) == 1000
 
 

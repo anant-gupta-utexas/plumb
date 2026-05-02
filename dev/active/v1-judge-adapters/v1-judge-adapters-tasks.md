@@ -282,16 +282,16 @@ Effort: **S** ≤ 1 h · **M** ≤ 4 h · **L** ≤ 1 day · **XL** > 1 day.
 
 **Objective:** Update user-facing docs; record deferred entries; run quality gates.
 
-### T5.1 — Update docs and seed an example prompt `[M]`
+### T5.1 — Update docs and seed an example prompt `[M]` ✅
 
 **Description:** Document `PLUMB_JUDGE_*` env vars, the prompt-file convention, the JSON-verdict contract, and the fail-open behaviour. Provide a starter `routing_top1.md` prompt file as a documentation example (not shipped in the wheel).
 
 **Acceptance Criteria:**
-- [ ] `docs/3_guides/getting_started.md` adds a "Running a judge" section with a copy-paste example for both providers.
-- [ ] `docs/2_architecture/deferred-features.md` adds entries: "Per-metric model env overrides", "Concurrent judge calls", "File-backed prompt edit UX", "Streaming verdicts", "Tool-use judges (CLI-style)", "Multi-judge consensus / ensembling".
-- [ ] `docs/3_guides/judge_prompts/routing_top1.md` — example prompt, explicitly NOT loaded by code.
-- [ ] `interrogate --fail-under 95 plumb/api.py plumb/cli.py plumb/http.py` still passes (this slice does not touch those files' public surface).
-- [ ] Each new public function has a Google-style docstring with at least one usage example.
+- [x] `docs/3_guides/getting_started.md` adds a "Running a judge" section with a copy-paste example for both providers.
+- [x] `docs/2_architecture/deferred-features.md` adds entries: "Per-metric model env overrides", "Concurrent judge calls", "File-backed prompt edit UX", "Streaming verdicts", "Tool-use judges (CLI-style)", "Multi-judge consensus / ensembling".
+- [x] `docs/3_guides/judge_prompts/routing_top1.md` — example prompt, explicitly NOT loaded by code.
+- [x] `interrogate --fail-under 95 plumb/api.py plumb/cli.py plumb/http.py` still passes (this slice does not touch those files' public surface).
+- [x] Each new public function has a Google-style docstring with at least one usage example.
 
 **Files to Create/Modify:**
 - `docs/3_guides/getting_started.md`
@@ -303,18 +303,18 @@ Effort: **S** ≤ 1 h · **M** ≤ 4 h · **L** ≤ 1 day · **XL** > 1 day.
 
 ---
 
-### T5.2 — Code review + verify suite `[S]`
+### T5.2 — Code review + verify suite `[S]` ✅
 
 **Description:** Run `/DEV-ESSENTIALS:code-review` and `/DEV-ESSENTIALS:verify` on the slice diff; resolve findings.
 
 **Acceptance Criteria:**
-- [ ] `ruff check .` clean.
-- [ ] `ruff format --check .` clean.
-- [ ] `mypy --strict plumb/core/` clean (regression check).
-- [ ] `pytest --cov=plumb --cov-fail-under=75` passes.
-- [ ] No real network calls in CI (`socket.connect` monkeypatch fixture honored).
-- [ ] No new ruff `S` (security) warnings.
-- [ ] All new files ≤ 400 LOC, all functions ≤ 50 LOC (per CLAUDE.md style guide).
+- [x] `ruff check .` clean.
+- [x] `ruff format --check .` clean.
+- [x] `mypy --strict plumb/core/` clean (regression check).
+- [x] `pytest --cov=plumb --cov-fail-under=75` passes.
+- [x] No real network calls in CI (`socket.connect` monkeypatch fixture honored).
+- [x] No new ruff `S` (security) warnings.
+- [x] All new files ≤ 400 LOC, all functions ≤ 50 LOC (per CLAUDE.md style guide).
 
 **Files to Create/Modify:** none — verification-only.
 **Dependencies:** all prior tasks.
