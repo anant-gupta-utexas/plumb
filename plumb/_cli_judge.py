@@ -80,7 +80,10 @@ def register(judge_app: typer.Typer, get_storage, resolve_since, die) -> None:  
                     typer.echo("Nothing to judge.")
                     return
 
-                adapter = _load_judge_adapter(provider, model)
+                try:
+                    adapter = _load_judge_adapter(provider, model, metric_name=metric)
+                except (ValueError, FileNotFoundError) as exc:
+                    die(str(exc))
 
                 blob_store = _make_blob_store()
                 for run in runs:
@@ -125,12 +128,12 @@ def register(judge_app: typer.Typer, get_storage, resolve_since, die) -> None:  
             die(str(exc))
 
 
-def _load_judge_adapter(provider: str, model: str):  # type: ignore[return]
-    """Instantiate the judge adapter for the given provider string.
+def _load_judge_adapter(provider: str, model: str, *, metric_name: str):  # type: ignore[return]
+    """Instantiate the judge adapter via the factory."""
+    from plumb.adapters import get_judge_adapter
+    from plumb.config import get_settings
 
-    # TODO(adapter-slice): wire real adapters per PD-2; dispatch on provider here.
-    """
-    raise NotImplementedError(f"Judge provider {provider!r} not yet implemented.")
+    return get_judge_adapter(get_settings(), metric_name=metric_name)
 
 
 def _make_blob_store():
