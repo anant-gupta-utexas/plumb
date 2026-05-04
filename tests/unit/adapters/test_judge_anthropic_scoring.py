@@ -1,22 +1,27 @@
-"""Tests for plumb/adapters/judge_anthropic.py."""
+"""Scoring, retry, fail-open, and security tests for AnthropicJudge.
+
+Construction and metadata tests live in test_judge_anthropic_construction.py.
+"""
 
 from __future__ import annotations
 
 import logging
-import re
 import socket
 from types import SimpleNamespace
-from unittest.mock import MagicMock, call, patch
+from typing import TYPE_CHECKING
+from unittest.mock import MagicMock, patch
+
+if TYPE_CHECKING:
+    import anthropic
 
 import pytest
 
 from plumb.adapters.judge_anthropic import AnthropicJudge
 from plumb.core.entities import JudgeResult
-from plumb.core.errors import ValidationError
 
 
 # ---------------------------------------------------------------------------
-# Helpers / fixtures
+# Helpers
 # ---------------------------------------------------------------------------
 
 
@@ -60,47 +65,13 @@ def _make_judge(mock_client: MagicMock | None = None) -> AnthropicJudge:
     )
 
 
-# ---------------------------------------------------------------------------
-# Constructor validation
-# ---------------------------------------------------------------------------
+def _make_api_status_error(status_code: int, body: str = "") -> anthropic.APIStatusError:
+    import anthropic
+    import httpx
 
-
-def test_rejects_empty_api_key() -> None:
-    with pytest.raises(ValidationError):
-        AnthropicJudge(api_key="", prompt="p", prompt_sha="a1b2c3d4")
-
-
-def test_rejects_empty_prompt() -> None:
-    with pytest.raises(ValidationError):
-        AnthropicJudge(api_key="sk-ant-test", prompt="", prompt_sha="a1b2c3d4")
-
-
-def test_rejects_empty_prompt_sha() -> None:
-    with pytest.raises(ValidationError):
-        AnthropicJudge(api_key="sk-ant-test", prompt="p", prompt_sha="")
-
-
-def test_accepts_injected_client() -> None:
-    client = MagicMock()
-    judge = AnthropicJudge(api_key="sk-ant-test", prompt="p", prompt_sha="sha", client=client)
-    assert judge._client is client
-
-
-# ---------------------------------------------------------------------------
-# Metadata
-# ---------------------------------------------------------------------------
-
-
-def test_name_and_version() -> None:
-    judge = _make_judge()
-    assert judge.name == "anthropic"
-    assert judge.version == "1"
-
-
-def test_isinstance_judge_adapter() -> None:
-    from plumb.core.ports import JudgeAdapter
-
-    assert isinstance(_make_judge(), JudgeAdapter)
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    response = httpx.Response(status_code, request=request)
+    return anthropic.APIStatusError(body or f"HTTP {status_code}", response=response, body=body)
 
 
 # ---------------------------------------------------------------------------
@@ -133,9 +104,7 @@ def test_happy_path_scorer_version() -> None:
     judge = _make_judge(client)
 
     with patch("time.sleep"):
-        result = judge.score(
-            metric_name="m", prompt="", content="c", model="claude-sonnet-4-6"
-        )
+        result = judge.score(metric_name="m", prompt="", content="c", model="claude-sonnet-4-6")
 
     assert result.scorer_version == "anthropic:claude-sonnet-4-6:a1b2c3d4"
 
@@ -267,9 +236,7 @@ def test_rate_limit_three_times_fail_open() -> None:
     import anthropic
 
     client = MagicMock()
-    client.messages.create.side_effect = anthropic.RateLimitError.__new__(
-        anthropic.RateLimitError
-    )
+    client.messages.create.side_effect = anthropic.RateLimitError.__new__(anthropic.RateLimitError)
     judge = _make_judge(client)
 
     with patch("time.sleep"):
@@ -296,15 +263,6 @@ def test_fail_open_rationale_truncated_to_500_chars() -> None:
         result = judge.score(metric_name="m", prompt="", content="c", model="model")
 
     assert len(result.rationale) <= 500
-
-
-def _make_api_status_error(status_code: int, body: str = "") -> "anthropic.APIStatusError":
-    import anthropic
-    import httpx
-
-    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-    response = httpx.Response(status_code, request=request)
-    return anthropic.APIStatusError(body or f"HTTP {status_code}", response=response, body=body)
 
 
 def test_api_status_500_three_times_fail_open() -> None:
@@ -405,9 +363,8 @@ def test_api_key_in_error_is_redacted_in_result(caplog: pytest.LogCaptureFixture
     client.messages.create.side_effect = exc
     judge = _make_judge(client)
 
-    with caplog.at_level(logging.WARNING):
-        with patch("time.sleep"):
-            result = judge.score(metric_name="m", prompt="", content="c", model="model")
+    with caplog.at_level(logging.WARNING), patch("time.sleep"):
+        result = judge.score(metric_name="m", prompt="", content="c", model="model")
 
     assert "sk-abc12345abcde" not in result.rationale
     assert "<redacted>" in result.rationale
@@ -424,14 +381,11 @@ def test_warning_emitted_once_per_fail_open(caplog: pytest.LogCaptureFixture) ->
     import anthropic
 
     client = MagicMock()
-    client.messages.create.side_effect = anthropic.RateLimitError.__new__(
-        anthropic.RateLimitError
-    )
+    client.messages.create.side_effect = anthropic.RateLimitError.__new__(anthropic.RateLimitError)
     judge = _make_judge(client)
 
-    with caplog.at_level(logging.WARNING):
-        with patch("time.sleep"):
-            judge.score(metric_name="m", prompt="", content="c", model="model")
+    with caplog.at_level(logging.WARNING), patch("time.sleep"):
+        judge.score(metric_name="m", prompt="", content="c", model="model")
 
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1
@@ -445,7 +399,6 @@ def test_warning_emitted_once_per_fail_open(caplog: pytest.LogCaptureFixture) ->
 def test_no_real_network_connect_called(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure socket.connect is never reached; mock client used."""
     connected: list[object] = []
-    original_connect = socket.socket.connect
 
     def fake_connect(self: socket.socket, *args: object) -> None:
         connected.append(args)

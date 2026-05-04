@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from plumb.adapters._judge_common import redact_body, redact_headers
-
 
 # ---------------------------------------------------------------------------
 # redact_headers

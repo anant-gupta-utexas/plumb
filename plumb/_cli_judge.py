@@ -107,12 +107,15 @@ def register(judge_app: typer.Typer, get_storage, resolve_since, die) -> None:  
                         )
                     except Exception as exc:
                         logger.warning("Judge failed for run %s: %s", run.run_id[:8], exc)
+                        # Use the same '{provider}:{model}:…:error' suffix shape as the
+                        # adapter's _fail_open path so the unscored-query filter
+                        # (scorer_version NOT LIKE '%:error') treats both as retryable.
                         score = Score(
                             score_id=uuid.uuid4().hex,
                             run_id=run.run_id,
                             metric_name=metric,
                             scorer=ScorerKind.JUDGE,
-                            scorer_version="error",
+                            scorer_version=f"{provider}:{model}:unknown:error",
                             scored_at=datetime.now(UTC),
                             value_label="error",
                         )
@@ -148,21 +151,43 @@ def _make_blob_store():
 
 
 def _load_run_content(storage, blob_store, run_id: str) -> str:
-    """Return the primary span's blob content decoded as UTF-8, or '' if absent."""
-    from plumb.core.entities import SpanKind
+    """Return the model response blob for *run_id*, decoded as UTF-8.
+
+    Selection priority:
+    1. Successful LLM spans that have an ``output_hash`` (the model response).
+       Among these, the span with the most ``tokens_in`` (total tokens) is
+       chosen as a proxy for the most significant generation.
+    2. Any LLM span with ``output_hash`` (e.g. status unknown / failure).
+    3. Empty string — the run has no usable output to judge.
+
+    We never fall back to ``input_hash`` (the provider request payload) because
+    sending the prompt to the judge instead of the model response would produce
+    silently wrong scores.
+    """
+    from plumb.core.entities import SpanKind, SpanStatus
 
     if blob_store is None:
         return ""
 
     spans = storage.get_spans_for_run(run_id)
-    llm_spans = [s for s in spans if s.kind == SpanKind.LLM and s.input_hash]
-    if llm_spans:
-        primary = max(llm_spans, key=lambda s: s.tokens_in or 0)
-        target_hash = primary.input_hash
-    elif spans and spans[0].input_hash:
-        target_hash = spans[0].input_hash
+
+    # Prefer successful LLM spans with an output blob.
+    success_llm = [
+        s
+        for s in spans
+        if s.kind == SpanKind.LLM and s.output_hash and s.status == SpanStatus.SUCCESS
+    ]
+    if success_llm:
+        primary = max(success_llm, key=lambda s: s.tokens_in or 0)
+        target_hash = primary.output_hash
     else:
-        return ""
+        # Fall back to any LLM span with an output blob (e.g. status not set).
+        any_llm = [s for s in spans if s.kind == SpanKind.LLM and s.output_hash]
+        if any_llm:
+            primary = max(any_llm, key=lambda s: s.tokens_in or 0)
+            target_hash = primary.output_hash
+        else:
+            return ""
 
     try:
         data = blob_store.get(target_hash)  # type: ignore[arg-type]

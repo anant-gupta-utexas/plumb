@@ -42,17 +42,37 @@ def get_judge_adapter(settings: Settings, *, metric_name: str) -> JudgeAdapter:
             "Set it to 'anthropic' or 'openai_compat' to use 'plumb judge run'."
         )
 
-    from plumb._prompt_loader import load_prompt
+    # Validate provider and credentials before loading the prompt so callers
+    # see meaningful errors ("unsupported provider", "missing API key") rather
+    # than a FileNotFoundError that masks the real configuration problem.
+    if provider not in ("anthropic", "openai_compat"):
+        raise ValueError(f"Unsupported PLUMB_JUDGE_PROVIDER: {provider!r}")
 
-    prompt_text, prompt_sha = load_prompt(metric_name)
+    if provider == "anthropic" and not settings.judge_anthropic_api_key:
+        raise ValueError(
+            "PLUMB_JUDGE_ANTHROPIC_API_KEY is not set. "
+            "Provide your Anthropic API key to use provider='anthropic'."
+        )
+
+    if provider == "openai_compat" and not settings.judge_api_key:
+        raise ValueError(
+            "PLUMB_JUDGE_API_KEY is not set. Provide your API key to use provider='openai_compat'."
+        )
+
+    # Resolve the prompt directory from the *supplied* settings object, not the
+    # cached global, so callers with a custom data_dir get the correct path.
+    from pathlib import Path
+
+    from plumb._prompt_loader import load_prompt
+    from plumb.config import ensure_data_dir
+
+    prompts_dir: Path = ensure_data_dir(settings) / "judge_prompts"
+    prompt_text, prompt_sha = load_prompt(metric_name, prompts_dir=prompts_dir)
 
     if provider == "anthropic":
         return _make_anthropic(settings, prompt_text, prompt_sha)
 
-    if provider == "openai_compat":
-        return _make_openai_compat(settings, prompt_text, prompt_sha)
-
-    raise ValueError(f"Unsupported PLUMB_JUDGE_PROVIDER: {provider!r}")
+    return _make_openai_compat(settings, prompt_text, prompt_sha)
 
 
 def _make_anthropic(settings: Settings, prompt_text: str, prompt_sha: str) -> JudgeAdapter:
