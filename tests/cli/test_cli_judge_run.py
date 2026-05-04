@@ -233,7 +233,10 @@ def test_judge_run_failure_writes_error_score(storage, db_path) -> None:
         scores = st.get_scores_for_run(run.run_id)
     assert len(scores) == 1
     assert scores[0].value_label == "error"
-    assert scores[0].scorer_version == "error"
+    # Outer-except path uses '{provider}:{model}:unknown:error' to match the
+    # adapter _fail_open shape so the unscored-query NOT LIKE '%:error' filter
+    # treats this row as retryable.
+    assert scores[0].scorer_version.endswith(":error")
 
 
 # ---------------------------------------------------------------------------
@@ -277,3 +280,101 @@ def test_judge_run_passes_content_from_span(storage, db_path) -> None:
     assert result.exit_code == 0, result.output
     assert len(fake.calls) == 1
     assert fake.calls[0]["content"] == "test content"
+
+
+# ---------------------------------------------------------------------------
+# content selection: output_hash preferred over input_hash
+# ---------------------------------------------------------------------------
+
+
+def test_judge_run_reads_output_blob_not_input(storage, db_path) -> None:
+    """Judge receives the model response (output_hash blob), not the prompt (input_hash blob).
+
+    Regression test for the P1 bug where _load_run_content used input_hash.
+    """
+    import hashlib
+
+    from plumb.adapters.blobstore_fs import FilesystemBlobStore
+
+    request_bytes = b'{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}'
+    response_bytes = b'{"choices":[{"message":{"content":"world"}}]}'
+
+    # Compute hashes the same way autocapture does.
+    request_hash = hashlib.sha256(request_bytes).hexdigest()
+    response_hash = hashlib.sha256(response_bytes).hexdigest()
+
+    # Write blobs to the same data_dir the CLI will use.
+    blob_store = FilesystemBlobStore(db_path.parent)
+    blob_store.put(request_bytes)
+    blob_store.put(response_bytes)
+
+    # Create a run with a span that has both input_hash and output_hash.
+    run = make_run(1)
+    span = make_span(
+        1,
+        run.run_id,
+        tokens_in=10,
+        input_hash=request_hash,
+        output_hash=response_hash,
+    )
+    storage.write_run(run, [span])
+    storage.close()
+
+    fake = FakeJudgeAdapter(value_label="pass")
+    with _patch_adapter(fake):
+        result = _invoke(db_path, "--model", "gpt-4o", "--metric", "quality")
+
+    assert result.exit_code == 0, result.output
+    assert len(fake.calls) == 1
+    # The judge must receive the *response* bytes, not the request bytes.
+    assert fake.calls[0]["content"] == response_bytes.decode("utf-8")
+
+
+# ---------------------------------------------------------------------------
+# rerun after error score: :error rows are not treated as "already scored"
+# ---------------------------------------------------------------------------
+
+
+def test_judge_run_retries_after_error_score(storage, db_path) -> None:
+    """A run with an existing ':error' scorer_version score is re-judged on the next run.
+
+    Regression test for the P1 bug where the NOT EXISTS query blocked re-judging
+    after a transient outage wrote an error score.
+    """
+    from datetime import UTC, datetime
+
+    from plumb.core.entities import Score, ScorerKind
+
+    run = make_run(1)
+    storage.write_run(run, [])
+
+    # Pre-seed an error score row — simulates a prior transient failure.
+    error_score = Score(
+        score_id="e" * 32,
+        run_id=run.run_id,
+        metric_name="quality",
+        scorer=ScorerKind.JUDGE,
+        scorer_version="anthropic:gpt-4o:abc12345:error",
+        scored_at=datetime.now(UTC),
+        value_label="error",
+    )
+    storage.write_score(error_score)
+    storage.close()
+
+    fake = FakeJudgeAdapter(value_label="pass")
+    with _patch_adapter(fake):
+        result = _invoke(db_path, "--model", "gpt-4o", "--metric", "quality")
+
+    assert result.exit_code == 0, result.output
+    # The run must be re-judged despite the prior error score.
+    assert len(fake.calls) == 1
+
+    from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
+    from tests.cli.conftest import _Clock
+
+    with SQLiteStorageAdapter(db_path, clock=_Clock()) as st:
+        scores = st.get_scores_for_run(run.run_id)
+    # Now we have both the original error row and the fresh pass row.
+    assert len(scores) == 2
+    labels = {s.value_label for s in scores}
+    assert "pass" in labels

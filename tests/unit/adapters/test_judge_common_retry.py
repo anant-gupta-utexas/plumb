@@ -120,6 +120,10 @@ def test_sleep_durations_monotonically_nondecreasing() -> None:
 
 
 def test_sleep_durations_within_bounds() -> None:
+    # wait_exponential_jitter(initial=1, max=8) formula: initial * 2^(attempt-1) + uniform(0, 1)
+    # attempt 1 (first retry) → 1*2^0 + [0,1] = [1, 2]
+    # attempt 2 (second retry) → 1*2^1 + [0,1] = [2, 3]
+    # so lower bound is 1.0, upper bound is 8.0.
     @with_judge_retry
     def fn() -> None:
         raise JudgeTransientError("x")

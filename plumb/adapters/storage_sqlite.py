@@ -559,7 +559,9 @@ class SQLiteStorageAdapter:
                 AND (? IS NULL OR r.task_id = ?)
                 AND NOT EXISTS (
                     SELECT 1 FROM scores s
-                    WHERE s.run_id = r.run_id AND s.metric_name = ?
+                    WHERE s.run_id = r.run_id
+                      AND s.metric_name = ?
+                      AND s.scorer_version NOT LIKE '%:error'
                 )
             ORDER BY r.start_ts DESC
             LIMIT ?

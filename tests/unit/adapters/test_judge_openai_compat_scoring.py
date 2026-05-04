@@ -1,4 +1,7 @@
-"""Tests for plumb/adapters/judge_anthropic.py."""
+"""Scoring, retry, fail-open, and security tests for OpenAICompatibleJudge.
+
+Construction and metadata tests live in test_judge_openai_compat_construction.py.
+"""
 
 from __future__ import annotations
 
@@ -9,16 +12,16 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 if TYPE_CHECKING:
-    import anthropic
+    import openai
 
 import pytest
 
-from plumb.adapters.judge_anthropic import AnthropicJudge
+from plumb.adapters.judge_openai_compat import OpenAICompatibleJudge
 from plumb.core.entities import JudgeResult
-from plumb.core.errors import ValidationError
+
 
 # ---------------------------------------------------------------------------
-# Helpers / fixtures
+# Helpers
 # ---------------------------------------------------------------------------
 
 
@@ -32,8 +35,8 @@ def _make_response(
 
     text = json.dumps({"verdict": verdict, "rationale": rationale})
     return SimpleNamespace(
-        content=[SimpleNamespace(text=text)],
-        usage=SimpleNamespace(input_tokens=tokens_in, output_tokens=tokens_out),
+        choices=[SimpleNamespace(message=SimpleNamespace(content=text))],
+        usage=SimpleNamespace(prompt_tokens=tokens_in, completion_tokens=tokens_out),
     )
 
 
@@ -47,62 +50,41 @@ def _make_numeric_response(
 
     text = json.dumps({"verdict": score, "rationale": rationale})
     return SimpleNamespace(
-        content=[SimpleNamespace(text=text)],
-        usage=SimpleNamespace(input_tokens=tokens_in, output_tokens=tokens_out),
+        choices=[SimpleNamespace(message=SimpleNamespace(content=text))],
+        usage=SimpleNamespace(prompt_tokens=tokens_in, completion_tokens=tokens_out),
     )
 
 
-def _make_judge(mock_client: MagicMock | None = None) -> AnthropicJudge:
+def _make_judge(
+    mock_client: MagicMock | None = None,
+    base_url: str | None = None,
+) -> OpenAICompatibleJudge:
     client = mock_client or MagicMock()
-    return AnthropicJudge(
-        api_key="sk-ant-test",
+    return OpenAICompatibleJudge(
+        api_key="sk-test-key",
         prompt="Rate this as pass or fail.",
         prompt_sha="a1b2c3d4",
+        base_url=base_url,
         client=client,
     )
 
 
-# ---------------------------------------------------------------------------
-# Constructor validation
-# ---------------------------------------------------------------------------
+def _make_api_status_error(status_code: int, body: str = "") -> openai.APIStatusError:
+    import httpx
+    import openai
+
+    request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    response = httpx.Response(status_code, request=request)
+    return openai.APIStatusError(body or f"HTTP {status_code}", response=response, body=body)
 
 
-def test_rejects_empty_api_key() -> None:
-    with pytest.raises(ValidationError):
-        AnthropicJudge(api_key="", prompt="p", prompt_sha="a1b2c3d4")
+def _make_rate_limit_error() -> openai.RateLimitError:
+    import httpx
+    import openai
 
-
-def test_rejects_empty_prompt() -> None:
-    with pytest.raises(ValidationError):
-        AnthropicJudge(api_key="sk-ant-test", prompt="", prompt_sha="a1b2c3d4")
-
-
-def test_rejects_empty_prompt_sha() -> None:
-    with pytest.raises(ValidationError):
-        AnthropicJudge(api_key="sk-ant-test", prompt="p", prompt_sha="")
-
-
-def test_accepts_injected_client() -> None:
-    client = MagicMock()
-    judge = AnthropicJudge(api_key="sk-ant-test", prompt="p", prompt_sha="sha", client=client)
-    assert judge._client is client
-
-
-# ---------------------------------------------------------------------------
-# Metadata
-# ---------------------------------------------------------------------------
-
-
-def test_name_and_version() -> None:
-    judge = _make_judge()
-    assert judge.name == "anthropic"
-    assert judge.version == "1"
-
-
-def test_isinstance_judge_adapter() -> None:
-    from plumb.core.ports import JudgeAdapter
-
-    assert isinstance(_make_judge(), JudgeAdapter)
+    req = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    resp = httpx.Response(429, request=req)
+    return openai.RateLimitError("rate limited", response=resp, body="")
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +94,7 @@ def test_isinstance_judge_adapter() -> None:
 
 def test_happy_path_returns_judge_result() -> None:
     client = MagicMock()
-    client.messages.create.return_value = _make_response("pass", "ok", 10, 5)
+    client.chat.completions.create.return_value = _make_response("pass", "ok", 10, 5)
     judge = _make_judge(client)
 
     with patch("time.sleep"):
@@ -120,7 +102,7 @@ def test_happy_path_returns_judge_result() -> None:
             metric_name="routing_top1",
             prompt="",
             content="some content",
-            model="claude-sonnet-4-6",
+            model="gpt-4o",
         )
 
     assert isinstance(result, JudgeResult)
@@ -131,18 +113,18 @@ def test_happy_path_returns_judge_result() -> None:
 
 def test_happy_path_scorer_version() -> None:
     client = MagicMock()
-    client.messages.create.return_value = _make_response("pass")
+    client.chat.completions.create.return_value = _make_response("pass")
     judge = _make_judge(client)
 
     with patch("time.sleep"):
-        result = judge.score(metric_name="m", prompt="", content="c", model="claude-sonnet-4-6")
+        result = judge.score(metric_name="m", prompt="", content="c", model="gpt-4o")
 
-    assert result.scorer_version == "anthropic:claude-sonnet-4-6:a1b2c3d4"
+    assert result.scorer_version == "openai_compat:gpt-4o:a1b2c3d4"
 
 
-def test_happy_path_tokens() -> None:
+def test_happy_path_tokens_from_usage() -> None:
     client = MagicMock()
-    client.messages.create.return_value = _make_response(tokens_in=42, tokens_out=7)
+    client.chat.completions.create.return_value = _make_response(tokens_in=42, tokens_out=7)
     judge = _make_judge(client)
 
     with patch("time.sleep"):
@@ -154,7 +136,7 @@ def test_happy_path_tokens() -> None:
 
 def test_happy_path_latency_ms_positive() -> None:
     client = MagicMock()
-    client.messages.create.return_value = _make_response()
+    client.chat.completions.create.return_value = _make_response()
     judge = _make_judge(client)
 
     with patch("time.sleep"):
@@ -163,37 +145,38 @@ def test_happy_path_latency_ms_positive() -> None:
     assert result.latency_ms >= 0.0
 
 
-def test_system_prompt_sent_with_cache_control() -> None:
+def test_system_prompt_as_first_message() -> None:
     client = MagicMock()
-    client.messages.create.return_value = _make_response()
+    client.chat.completions.create.return_value = _make_response()
     judge = _make_judge(client)
 
     with patch("time.sleep"):
-        judge.score(metric_name="m", prompt="", content="c", model="model")
+        judge.score(metric_name="m", prompt="", content="user content", model="model")
 
-    _, kwargs = client.messages.create.call_args
-    system = kwargs["system"]
-    assert isinstance(system, list)
-    assert system[0]["cache_control"] == {"type": "ephemeral"}
-    assert system[0]["type"] == "text"
+    _, kwargs = client.chat.completions.create.call_args
+    messages = kwargs["messages"]
+    assert messages[0]["role"] == "system"
+    assert messages[0]["content"] == "Rate this as pass or fail."
+    assert messages[1]["role"] == "user"
+    assert messages[1]["content"] == "user content"
 
 
 def test_request_uses_temperature_zero_and_max_tokens_1024() -> None:
     client = MagicMock()
-    client.messages.create.return_value = _make_response()
+    client.chat.completions.create.return_value = _make_response()
     judge = _make_judge(client)
 
     with patch("time.sleep"):
         judge.score(metric_name="m", prompt="", content="c", model="model")
 
-    _, kwargs = client.messages.create.call_args
+    _, kwargs = client.chat.completions.create.call_args
     assert kwargs["temperature"] == 0.0
     assert kwargs["max_tokens"] == 1024
 
 
 def test_numeric_verdict_returned() -> None:
     client = MagicMock()
-    client.messages.create.return_value = _make_numeric_response(0.75)
+    client.chat.completions.create.return_value = _make_numeric_response(0.75)
     judge = _make_judge(client)
 
     with patch("time.sleep"):
@@ -204,17 +187,14 @@ def test_numeric_verdict_returned() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Retry behaviour (AC-JUDGE-3)
+# Retry behaviour
 # ---------------------------------------------------------------------------
 
 
 def test_rate_limit_twice_then_success_invokes_sdk_three_times() -> None:
-    import anthropic
-
     client = MagicMock()
-    rate_err = anthropic.RateLimitError.__new__(anthropic.RateLimitError)
-
-    responses = [rate_err, rate_err, _make_response("pass")]
+    rate_err = _make_rate_limit_error()
+    responses: list[object] = [rate_err, rate_err, _make_response("pass")]
 
     def side_effect(*args: object, **kwargs: object) -> object:
         item = responses.pop(0)
@@ -222,25 +202,22 @@ def test_rate_limit_twice_then_success_invokes_sdk_three_times() -> None:
             raise item
         return item
 
-    client.messages.create.side_effect = side_effect
-
+    client.chat.completions.create.side_effect = side_effect
     judge = _make_judge(client)
     sleep_calls: list[float] = []
 
     with patch("time.sleep", side_effect=lambda s: sleep_calls.append(s)):
         result = judge.score(metric_name="m", prompt="", content="c", model="model")
 
-    assert client.messages.create.call_count == 3
+    assert client.chat.completions.create.call_count == 3
     assert result.value_label == "pass"
     assert len(sleep_calls) == 2
 
 
 def test_sleep_monotonically_nondecreasing_on_retry() -> None:
-    import anthropic
-
     client = MagicMock()
-    rate_err = anthropic.RateLimitError.__new__(anthropic.RateLimitError)
-    responses = [rate_err, rate_err, _make_response()]
+    rate_err = _make_rate_limit_error()
+    responses: list[object] = [rate_err, rate_err, _make_response()]
 
     def side_effect(*args: object, **kwargs: object) -> object:
         item = responses.pop(0)
@@ -248,7 +225,7 @@ def test_sleep_monotonically_nondecreasing_on_retry() -> None:
             raise item
         return item
 
-    client.messages.create.side_effect = side_effect
+    client.chat.completions.create.side_effect = side_effect
     judge = _make_judge(client)
     sleep_calls: list[float] = []
 
@@ -259,35 +236,35 @@ def test_sleep_monotonically_nondecreasing_on_retry() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Fail-open paths (AC-JUDGE-4)
+# Fail-open paths
 # ---------------------------------------------------------------------------
 
 
 def test_rate_limit_three_times_fail_open() -> None:
-    import anthropic
-
     client = MagicMock()
-    client.messages.create.side_effect = anthropic.RateLimitError.__new__(anthropic.RateLimitError)
+    client.chat.completions.create.side_effect = _make_rate_limit_error()
     judge = _make_judge(client)
 
     with patch("time.sleep"):
-        result = judge.score(metric_name="m", prompt="", content="c", model="claude-sonnet-4-6")
+        result = judge.score(metric_name="m", prompt="", content="c", model="gpt-4o")
 
     assert result.value_label == "error"
-    assert result.scorer_version == "anthropic:claude-sonnet-4-6:a1b2c3d4:error"
+    assert result.scorer_version == "openai_compat:gpt-4o:a1b2c3d4:error"
     assert result.tokens_in == 0
     assert result.tokens_out == 0
     assert result.latency_ms == 0.0
 
 
 def test_fail_open_rationale_truncated_to_500_chars() -> None:
-    import anthropic
+    import httpx
+    import openai
 
     long_msg = "x" * 600
     client = MagicMock()
-    exc = anthropic.RateLimitError.__new__(anthropic.RateLimitError)
-    exc.args = (long_msg,)
-    client.messages.create.side_effect = exc
+    req = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    resp = httpx.Response(429, request=req)
+    exc = openai.RateLimitError(long_msg, response=resp, body=long_msg)
+    client.chat.completions.create.side_effect = exc
     judge = _make_judge(client)
 
     with patch("time.sleep"):
@@ -296,21 +273,12 @@ def test_fail_open_rationale_truncated_to_500_chars() -> None:
     assert len(result.rationale) <= 500
 
 
-def _make_api_status_error(status_code: int, body: str = "") -> anthropic.APIStatusError:
-    import anthropic
-    import httpx
-
-    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-    response = httpx.Response(status_code, request=request)
-    return anthropic.APIStatusError(body or f"HTTP {status_code}", response=response, body=body)
-
-
-def test_api_status_500_three_times_fail_open() -> None:
+def test_api_status_5xx_three_times_fail_open() -> None:
     client = MagicMock()
-    client.messages.create.side_effect = [
+    client.chat.completions.create.side_effect = [
         _make_api_status_error(500),
-        _make_api_status_error(500),
-        _make_api_status_error(500),
+        _make_api_status_error(503),
+        _make_api_status_error(502),
     ]
     judge = _make_judge(client)
 
@@ -318,39 +286,29 @@ def test_api_status_500_three_times_fail_open() -> None:
         result = judge.score(metric_name="m", prompt="", content="c", model="model")
 
     assert result.value_label == "error"
+    assert client.chat.completions.create.call_count == 3
 
 
-def test_api_status_400_fail_open_immediately() -> None:
+def test_api_status_4xx_non_429_fail_open_immediately() -> None:
     client = MagicMock()
-    client.messages.create.side_effect = _make_api_status_error(400)
+    client.chat.completions.create.side_effect = _make_api_status_error(400)
     judge = _make_judge(client)
 
     with patch("time.sleep") as mock_sleep:
         result = judge.score(metric_name="m", prompt="", content="c", model="model")
 
     assert result.value_label == "error"
-    assert client.messages.create.call_count == 1
-    mock_sleep.assert_not_called()
-
-
-def test_authentication_error_fail_open_immediately() -> None:
-    client = MagicMock()
-    client.messages.create.side_effect = _make_api_status_error(401)
-    judge = _make_judge(client)
-
-    with patch("time.sleep") as mock_sleep:
-        result = judge.score(metric_name="m", prompt="", content="c", model="model")
-
-    assert result.value_label == "error"
-    assert client.messages.create.call_count == 1
+    assert client.chat.completions.create.call_count == 1
     mock_sleep.assert_not_called()
 
 
 def test_connection_error_once_then_success_retries() -> None:
-    import anthropic
+    import httpx
+    import openai
 
     client = MagicMock()
-    conn_err = anthropic.APIConnectionError.__new__(anthropic.APIConnectionError)
+    req = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    conn_err = openai.APIConnectionError(request=req)
     responses: list[object] = [conn_err, _make_response("fail")]
 
     def side_effect(*args: object, **kwargs: object) -> object:
@@ -359,14 +317,14 @@ def test_connection_error_once_then_success_retries() -> None:
             raise item
         return item
 
-    client.messages.create.side_effect = side_effect
+    client.chat.completions.create.side_effect = side_effect
     judge = _make_judge(client)
 
     with patch("time.sleep"):
         result = judge.score(metric_name="m", prompt="", content="c", model="model")
 
     assert result.value_label == "fail"
-    assert client.messages.create.call_count == 2
+    assert client.chat.completions.create.call_count == 2
 
 
 # ---------------------------------------------------------------------------
@@ -376,9 +334,9 @@ def test_connection_error_once_then_success_retries() -> None:
 
 def test_non_json_reply_fail_open() -> None:
     client = MagicMock()
-    client.messages.create.return_value = SimpleNamespace(
-        content=[SimpleNamespace(text="not json at all")],
-        usage=SimpleNamespace(input_tokens=5, output_tokens=3),
+    client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="not json at all"))],
+        usage=SimpleNamespace(prompt_tokens=5, completion_tokens=3),
     )
     judge = _make_judge(client)
 
@@ -389,18 +347,20 @@ def test_non_json_reply_fail_open() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Security: API key redaction (AC-JUDGE-5)
+# Security: API key redaction
 # ---------------------------------------------------------------------------
 
 
 def test_api_key_in_error_is_redacted_in_result(caplog: pytest.LogCaptureFixture) -> None:
-    import anthropic
+    import httpx
+    import openai
 
     client = MagicMock()
     key_in_msg = "error: sk-abc12345abcde"
-    exc = anthropic.RateLimitError.__new__(anthropic.RateLimitError)
-    exc.args = (key_in_msg,)
-    client.messages.create.side_effect = exc
+    req = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    resp = httpx.Response(429, request=req)
+    exc = openai.RateLimitError(key_in_msg, response=resp, body=key_in_msg)
+    client.chat.completions.create.side_effect = exc
     judge = _make_judge(client)
 
     with caplog.at_level(logging.WARNING), patch("time.sleep"):
@@ -418,10 +378,8 @@ def test_api_key_in_error_is_redacted_in_result(caplog: pytest.LogCaptureFixture
 
 
 def test_warning_emitted_once_per_fail_open(caplog: pytest.LogCaptureFixture) -> None:
-    import anthropic
-
     client = MagicMock()
-    client.messages.create.side_effect = anthropic.RateLimitError.__new__(anthropic.RateLimitError)
+    client.chat.completions.create.side_effect = _make_rate_limit_error()
     judge = _make_judge(client)
 
     with caplog.at_level(logging.WARNING), patch("time.sleep"):
@@ -429,6 +387,44 @@ def test_warning_emitted_once_per_fail_open(caplog: pytest.LogCaptureFixture) ->
 
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1
+
+
+# ---------------------------------------------------------------------------
+# Base URL HTTP-level test (AC-INT-2)
+# ---------------------------------------------------------------------------
+
+
+def test_base_url_forwarded_to_openai_sdk() -> None:
+    """base_url is passed into OpenAI(base_url=...) when building the client."""
+    with patch("openai.OpenAI") as mock_cls:
+        mock_instance = MagicMock()
+        mock_cls.return_value = mock_instance
+        mock_instance.chat.completions.create.return_value = _make_response()
+
+        judge = OpenAICompatibleJudge(
+            api_key="tok-abc",
+            prompt="p",
+            prompt_sha="sha",
+            base_url="https://openrouter.ai/api/v1",
+        )
+
+        with patch("time.sleep"):
+            judge.score(metric_name="m", prompt="", content="c", model="model")
+
+    mock_cls.assert_called_once_with(api_key="tok-abc", base_url="https://openrouter.ai/api/v1")
+
+
+def test_no_base_url_does_not_pass_base_url_kwarg() -> None:
+    """base_url=None → openai.OpenAI called without base_url keyword."""
+    with patch("openai.OpenAI") as mock_cls:
+        mock_instance = MagicMock()
+        mock_cls.return_value = mock_instance
+        mock_instance.chat.completions.create.return_value = _make_response()
+
+        OpenAICompatibleJudge(api_key="tok-abc", prompt="p", prompt_sha="sha")
+
+    call_kwargs = mock_cls.call_args[1]
+    assert "base_url" not in call_kwargs
 
 
 # ---------------------------------------------------------------------------
@@ -447,7 +443,7 @@ def test_no_real_network_connect_called(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(socket.socket, "connect", fake_connect)
 
     client = MagicMock()
-    client.messages.create.return_value = _make_response()
+    client.chat.completions.create.return_value = _make_response()
     judge = _make_judge(client)
 
     with patch("time.sleep"):

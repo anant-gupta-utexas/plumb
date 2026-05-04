@@ -66,8 +66,13 @@ def make_run(
     status: RunStatus = RunStatus.SUCCESS,
     start_offset_days: int = 0,
 ) -> Run:
-    """Create a deterministic Run for testing."""
-    start = datetime(2026, 4, 28, tzinfo=UTC) - timedelta(days=start_offset_days)
+    """Create a deterministic Run for testing.
+
+    start_offset_days is subtracted from *now* so that ``start_offset_days=0``
+    always means "today" and since-filters remain correct regardless of the
+    calendar date on which the tests run.
+    """
+    start = datetime.now(UTC) - timedelta(days=start_offset_days)
     return Run(
         run_id=_hex32(n),
         task_id=task_id,
@@ -79,7 +84,12 @@ def make_run(
 
 
 def make_span(
-    n: int, run_id: str, kind: SpanKind = SpanKind.LLM, tokens_in: int | None = None
+    n: int,
+    run_id: str,
+    kind: SpanKind = SpanKind.LLM,
+    tokens_in: int | None = None,
+    input_hash: str | None = None,
+    output_hash: str | None = None,
 ) -> Span:
     return Span(
         span_id=_hex32(n + 1000),
@@ -88,7 +98,8 @@ def make_span(
         name="test-span",
         status=SpanStatus.SUCCESS,
         tokens_in=tokens_in,
-        input_hash=_hex64(n),
+        input_hash=input_hash if input_hash is not None else _hex64(n),
+        output_hash=output_hash,
     )
 
 

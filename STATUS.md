@@ -1,9 +1,9 @@
 ---
 project: plumb
 status: building
-phase: v1 (Phase 9 complete, Week 5)
-last_updated: 2026-05-01
-next_gate: v1-http / v1-judge-adapters
+phase: v1 (Phase 10 complete, Week 5)
+last_updated: 2026-05-04
+next_gate: v1-http / v1-judge-adapters merge-ready
 blocked_on: null
 ---
 
@@ -11,42 +11,40 @@ blocked_on: null
 
 ## Current
 
-v1-cli slice shipped and archived. `plumb/cli.py` (384 LOC) + `plumb/_cli_judge.py` (168 LOC)
-implement all seven subcommands: `run stats`, `score write`, `example promote`, `judge run`,
-`serve`, `attach`, `version`. Supports filtering (since, task-id), output formats (table/json/csv),
-and dry-run mode. All 569 tests pass; ruff-clean. Code review findings fully addressed.
+v1-judge-adapters Phase 6 (code-review remediation) complete. All P1 and P2 findings from the
+code review addressed: CLI now judges model responses (P1 #1), error scores are retryable (P1 #2),
+factory honors supplied `Settings.data_dir` (P2 #1), and retry uses `tenacity.wait_exponential_jitter`
+per plan (P2 #2). Two previously-failing CLI tests fixed via hardcoded baseline date → `datetime.now(UTC)`
+in `make_run()`. All 711 tests pass; ruff-clean. Test files split to approach 400-LOC target.
 
 ## Recent (last 7 days)
 
-- v1-autocapture Phases 1–8 complete and archived.
-- v1-cli code review (2026-04-30) findings fixed and merged:
-  - **C-1**: `_die()` annotated `-> NoReturn` (was `-> None`); fixes silent fall-through
-    in `_resolve_since` caught by type checker.
-  - **C-2**: Added `except typer.Exit: raise` guards in `run_stats`, `score_write`,
-    `example_promote` to prevent re-catching and double-printing error messages.
-  - **C-3**: Added `list_runs_unscored_for_metric()` to `SQLiteStorageAdapter`;
-    removed `_conn` reach-in and private `_row_to_run` import from cli.py (PD-4).
-  - **I-1/DR-5**: Updated context: inputs_hash enforced as 64-char hex by entity layer;
-    zero-span runs use `sha256(b"no_spans")` as deterministic sentinel.
-  - **I-2**: Extracted `judge_run` to `plumb/_cli_judge.py` (~135 LOC); brought cli.py
-    from 514 to 384 LOC (below 400-LOC target per DR-2).
-  - **I-3**: Fixed serve `OSError` handler to use `errno.EADDRINUSE` instead of substring.
-  - **I-4/5/6/8/9**: Stub comment for judge adapters, _RealClock module-level,
-    blob_store hoist, typer-native path validation, empty label guard.
-  - **M-6**: Added `test_attach_storage_error_exits_1`.
-  - Moved `dev/active/v1-cli/ → dev/archive/v1-cli/`.
-- All 569 tests pass; source ruff-clean.
+- v1-judge-adapters code review (2026-05-04) findings fully remediated:
+  - **P1 #1**: `_load_run_content()` now prefers successful LLM spans with `output_hash` (model response),
+    falls back to any LLM span with `output_hash`, returns `""` if none — never judges the request blob.
+  - **P1 #2**: SQL `NOT EXISTS` now checks `s.scorer_version NOT LIKE '%:error'` so error rows don't
+    block re-judging; CLI outer-except writes `{provider}:{model}:unknown:error` (consistent suffix).
+  - **P2 #1**: `get_judge_adapter()` reordered: provider validation → credential validation → prompt loading.
+    Passes `prompts_dir=ensure_data_dir(settings) / "judge_prompts"` to honor supplied `Settings`.
+  - **P2 #2**: Replaced hand-rolled `with_judge_retry` with `tenacity.retry(stop=stop_after_attempt(3),
+    wait=wait_exponential_jitter(initial=1, max=8), retry=retry_if_exception_type(JudgeTransientError),
+    reraise=True)` per INT-JUDGE-5.
+  - **Test gaps**: Added output-blob selection test (real blobstore), error-score retry test, non-mocked
+    factory tests (real `data_dir`), and factory validation-order tests.
+  - **Build fix**: `make_run()` now uses `datetime.now(UTC) - timedelta(days=...)` so since-filter tests
+    stay correct over time. Fixed two failing CLI tests.
+  - **Test file splits**: Split oversize test files into `_construction` (validation/metadata) and
+    `_scoring` (happy path/retry/fail-open/security).
 
 ## Next
 
+- Finalize v1-judge-adapters: code cleanup, merge to main.
 - Implement v1-http: FastAPI read-only service (port 8765).
-- Implement v1-judge-adapters: Anthropic native + OpenAI-compat (OpenRouter / Ollama /
-  vLLM / LM Studio / LiteLLM).
 - Tag `v1.0` once atlas Day 2 integration test passes end-to-end.
 
 ## Blocked / waiting
 
-- None. Autocapture is stable; storage + core layers are load-bearing.
+- None. Core + CLI + autocapture + adapters stable.
 
 ## Pointers
 
@@ -55,5 +53,5 @@ and dry-run mode. All 569 tests pass; ruff-clean. Code review findings fully add
 - SDD: `docs/2_architecture/SYSTEM_DESIGN.md`
 - CLI archive: `dev/archive/v1-cli/`
 - Autocapture archive: `dev/archive/v1-autocapture/`
-- Prior archive: `dev/archive/v1-storage-adapter/`
+- Judge adapters (active): `dev/active/v1-judge-adapters/`
 - Deferred features: `docs/2_architecture/deferred-features.md`

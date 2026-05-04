@@ -190,6 +190,80 @@ def test_missing_prompt_propagates_file_not_found(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Non-mocked: settings.data_dir is honoured for prompt resolution
+# ---------------------------------------------------------------------------
+
+
+def test_factory_resolves_prompt_from_settings_data_dir(tmp_path: Path) -> None:
+    """get_judge_adapter reads the prompt from settings.data_dir, not the global config.
+
+    Regression test for P2 #1: load_prompt was called without prompts_dir,
+    so it fell back to the cached global get_settings() and ignored the
+    Settings object supplied by the caller.
+    """
+    from plumb.adapters.judge_anthropic import AnthropicJudge
+
+    # Write a real prompt file under the tmp data_dir.
+    prompts_dir = tmp_path / "judge_prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "my_metric.md").write_text("Evaluate this output.", encoding="utf-8")
+
+    settings = _settings(
+        data_dir=str(tmp_path),
+        judge_provider="anthropic",
+        judge_anthropic_api_key="sk-ant-test",
+    )
+
+    # Do NOT mock load_prompt — the factory must resolve the prompt from
+    # settings.data_dir, not from any cached global config.
+    with patch("plumb.adapters.judge_anthropic.AnthropicJudge._build_client"):
+        adapter = get_judge_adapter(settings, metric_name="my_metric")
+
+    assert isinstance(adapter, AnthropicJudge)
+    assert adapter._prompt == "Evaluate this output."
+
+
+def test_factory_raises_file_not_found_for_unknown_metric_in_real_dir(tmp_path: Path) -> None:
+    """FileNotFoundError is raised when the metric prompt file is absent under settings.data_dir."""
+    prompts_dir = tmp_path / "judge_prompts"
+    prompts_dir.mkdir()
+    # No prompt file written for "unknown_metric".
+
+    settings = _settings(
+        data_dir=str(tmp_path),
+        judge_provider="anthropic",
+        judge_anthropic_api_key="sk-ant-test",
+    )
+
+    with pytest.raises(FileNotFoundError, match="unknown_metric"):
+        get_judge_adapter(settings, metric_name="unknown_metric")
+
+
+def test_factory_validation_order_unsupported_provider_before_prompt(tmp_path: Path) -> None:
+    """Unsupported provider raises ValueError before FileNotFoundError for missing prompt."""
+    # No judge_prompts dir — if load_prompt ran first it would raise FileNotFoundError.
+    settings = _settings(
+        data_dir=str(tmp_path),
+        judge_provider="bogus_provider",
+    )
+    # Must raise ValueError (unsupported provider), not FileNotFoundError (missing prompt).
+    with pytest.raises(ValueError, match="Unsupported PLUMB_JUDGE_PROVIDER"):
+        get_judge_adapter(settings, metric_name="any_metric")
+
+
+def test_factory_validation_order_missing_key_before_prompt(tmp_path: Path) -> None:
+    """Missing credentials raise ValueError before FileNotFoundError for missing prompt."""
+    # No judge_prompts dir — if load_prompt ran first it would raise FileNotFoundError.
+    settings = _settings(
+        data_dir=str(tmp_path),
+        judge_provider="anthropic",
+        judge_anthropic_api_key=None,
+    )
+    with pytest.raises(ValueError, match="PLUMB_JUDGE_ANTHROPIC_API_KEY"):
+        get_judge_adapter(settings, metric_name="any_metric")
+
+
+# ---------------------------------------------------------------------------
 # Lazy imports: provider isolation (NFR-Perf-6)
 # ---------------------------------------------------------------------------
 

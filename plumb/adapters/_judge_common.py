@@ -16,11 +16,15 @@ from __future__ import annotations
 
 import json
 import re
-import time
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
-from functools import wraps
-from typing import Any
+
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 # ---------------------------------------------------------------------------
 # Exception types
@@ -103,49 +107,28 @@ def redact_body(text: str) -> str:
 # Retry decorator
 # ---------------------------------------------------------------------------
 
-_RETRY_ATTEMPTS = 3
-_WAIT_INITIAL = 1.0
-_WAIT_MAX = 8.0
-_NEVER_RETRY = (KeyboardInterrupt, SystemExit, MemoryError)
+with_judge_retry = retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential_jitter(initial=1, max=8),
+    retry=retry_if_exception_type(JudgeTransientError),
+    reraise=True,
+)
+"""Retry decorator: up to 3 attempts on :class:`JudgeTransientError`.
 
+Uses ``tenacity.wait_exponential_jitter(initial=1, max=8)`` — exponential
+backoff with random jitter bounded to [2+jitter, 8] seconds — to avoid
+thundering-herd behaviour under provider rate limits.
 
-def with_judge_retry[F: Callable[..., Any]](fn: F) -> F:
-    """Retry *fn* up to 3 attempts on :class:`JudgeTransientError`.
+The last exception is re-raised after the third failed attempt. All other
+exception types (including :class:`JudgeFatalError`, :class:`KeyboardInterrupt`,
+:class:`SystemExit`, :class:`MemoryError`) propagate immediately without retry.
 
-    Back-off: exponential with initial=1 s, cap=8 s (``min(2**attempt, 8)``).
-    The last exception is re-raised after the third failed attempt.
-    :class:`KeyboardInterrupt`, :class:`SystemExit`, and :class:`MemoryError`
-    are never retried and propagate immediately.
+Example::
 
-    Args:
-        fn: The callable to wrap.
-
-    Returns:
-        The wrapped callable with retry logic applied.
-
-    Example::
-
-        @with_judge_retry
-        def call_api() -> str:
-            ...
-    """
-
-    @wraps(fn)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        last_exc: BaseException | None = None
-        for attempt in range(1, _RETRY_ATTEMPTS + 1):
-            try:
-                return fn(*args, **kwargs)
-            except _NEVER_RETRY:
-                raise
-            except JudgeTransientError as exc:
-                last_exc = exc
-                if attempt < _RETRY_ATTEMPTS:
-                    wait = min(_WAIT_MAX, float(2**attempt))
-                    time.sleep(wait)
-        raise last_exc  # type: ignore[misc]
-
-    return wrapper  # type: ignore[return-value]
+    @with_judge_retry
+    def call_api() -> str:
+        ...
+"""
 
 
 # ---------------------------------------------------------------------------
