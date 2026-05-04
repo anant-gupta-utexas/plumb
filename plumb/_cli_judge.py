@@ -175,9 +175,7 @@ def _load_run_content(storage, blob_store, run_id: str) -> str:
     success_llm = [
         s
         for s in spans
-        if s.kind == SpanKind.LLM
-        and s.output_hash
-        and s.status == SpanStatus.SUCCESS
+        if s.kind == SpanKind.LLM and s.output_hash and s.status == SpanStatus.SUCCESS
     ]
     if success_llm:
         primary = max(success_llm, key=lambda s: s.tokens_in or 0)
