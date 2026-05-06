@@ -13,7 +13,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, NoReturn
 
-import typer
+try:
+    import typer
+except ImportError as _e:
+    raise ImportError(
+        "plumb CLI requires 'typer' and 'rich'. Install them with: pip install 'plumb[cli]'"
+    ) from _e
 
 from plumb._cli_judge import register as _register_judge
 from plumb._output import format_output
@@ -322,7 +327,14 @@ def serve(
     Binds to ``127.0.0.1:8765`` by default. Passing a non-loopback host
     emits a warning before startup. Ctrl-C exits cleanly with code 0.
     """
-    import uvicorn
+    try:
+        import uvicorn
+    except ImportError as _e:
+        _die(
+            "plumb serve requires 'fastapi' and 'uvicorn'. "
+            "Install them with: pip install 'plumb[http]'"
+        )
+        raise  # unreachable; satisfies type checker
 
     if host not in _LOOPBACK:
         logger.warning(

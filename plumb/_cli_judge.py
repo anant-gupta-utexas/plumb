@@ -104,6 +104,7 @@ def register(judge_app: typer.Typer, get_storage, resolve_since, die) -> None:  
                             scored_at=datetime.now(UTC),
                             value_numeric=result.value_numeric,
                             value_label=result.value_label,
+                            rationale=result.rationale,
                         )
                     except Exception as exc:
                         logger.warning("Judge failed for run %s: %s", run.run_id[:8], exc)

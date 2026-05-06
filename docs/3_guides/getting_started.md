@@ -24,9 +24,20 @@ uv sync
 ### As a library (once published to PyPI)
 
 ```bash
+# Core instrumentation only (no CLI, no HTTP service):
 pip install plumb
-# or
-uv add plumb
+
+# With CLI (plumb run stats, plumb judge run, …):
+pip install 'plumb[cli]'
+
+# With read-only HTTP service (plumb serve):
+pip install 'plumb[http]'
+
+# With LLM judge adapters (Anthropic + OpenAI):
+pip install 'plumb[judge]'
+
+# Everything:
+pip install 'plumb[all]'
 ```
 
 ---
@@ -313,5 +324,6 @@ The singleton is initialised lazily on the first `with run(...)` / `@run(...)` c
 ## Next steps
 
 - Read [Core Concepts](core_concepts.md) for a deeper look at entities, ports, and the ports-and-adapters layout
+- Read [Orchestrator Handoff Patterns](orchestrator_handoff.md) for multi-process and cross-process run wiring
 - See [Testing Guide](../4_testing/index.md) for test structure and coverage expectations
 - Review the architecture docs in `docs/2_architecture/` for the full system design

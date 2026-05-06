@@ -377,4 +377,60 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ---
 
+### v2 — `scores.rationale` durable column
+
+- **Decision:** deferred to v2
+- **Date:** 2026-05-06
+- **Context:** The `Score` entity already carries a `rationale: str | None` field, and judge adapters produce rationale text from every LLM verdict. In v1, rationale is wired through the in-memory entity and `RunHandle.add_score(rationale=...)`, but the SQLite `scores` table has no column for it — the value is silently dropped at the storage boundary. This was surfaced by atlas's gate-review auditability requirement.
+- **Options considered:**
+  - *v1 DDL addition* — add `rationale TEXT` to the `scores` CREATE TABLE. Con: schema migration forbidden after Week 4 (DATA-MIG-1).
+  - *Store in blob store via a new hash column on scores* — Con: `scores` has no hash column; also a schema change.
+  - **v1 API symmetry + v2 DDL (chosen)** — expose `rationale` on `RunHandle.add_score` and in `Score` entity now (no DDL); add the column and full adapter round-trip in v2.
+- **Rationale for current pick:** In-memory field is zero-risk; gives atlas API symmetry so it can pass rationale through `add_score` today and get durability for free when v2 ships the column. Avoids a footgun where the field looks available but silently vanishes.
+- **Revisit trigger:** v2 schema bump. Implementation: add `rationale TEXT` to DDL, bump `SCHEMA_VERSION` to 2, update `_score_to_row` / `_row_to_score` / `_INSERT_SCORE` in `storage_sqlite.py`.
+
+---
+
+### v2 — Idempotent score ingestion
+
+- **Decision:** deferred to v2
+- **Date:** 2026-05-06
+- **Context:** Hook-style integrations (e.g. atlas replaying a CI event on the same commit/run) can fire `add_score` multiple times with the same semantic content, producing duplicate score rows. A UNIQUE constraint or UPSERT would prevent this. Surfaced by atlas's recommendation for an `idempotency_key` parameter.
+- **Options considered:**
+  - *Application-level dedup (read-before-write)* — Pro: no schema change. Con: TOCTOU race under any concurrency; also adds a read on every score write.
+  - *Optional `idempotency_key` kwarg, ignored in v1* — Pro: API stable now. Con: silent no-op misleads callers.
+  - **Defer fully to v2 (chosen)** — add a UNIQUE index on `(run_id, metric_name, scorer_version, span_id)` (NULL-safe) and use `INSERT OR IGNORE` / `INSERT OR REPLACE` semantics in `write_score`. Expose `idempotency_key` on `RunHandle.add_score` and `plumb score write` CLI.
+- **Rationale for current pick:** Half-shipping a parameter that is documented as "accepted but ignored" creates a worse DX than a clean v2 wait. Score PKs are already random UUIDs so duplicates don't conflict on the primary key — callers can filter post-hoc with `list_runs_unscored_for_metric`'s existing `scorer_version NOT LIKE '%:error'` clause.
+- **Revisit trigger:** v2 schema bump (same release as rationale column). Requires a UNIQUE index addition + migration.
+
+---
+
+### v2 — `plumb.resume_run(run_id)` — same-run continuation across processes
+
+- **Decision:** deferred to v2
+- **Date:** 2026-05-06
+- **Context:** Atlas's `code_gen` stage needs to continue an orchestrator run from a second process, appending spans to the *same* `runs` row rather than creating a child run. The current `with run(...)` API always opens a new row (`INSERT` on enter) and finalises it on exit. Implementing continuation would add a third public entry point (`plumb.resume_run`) or a new mode on `run(...)`, both of which violate FR-API-1 (Tier-1 gating metric in PRD §8).
+- **Options considered:**
+  - *New top-level callable `plumb.resume_run(run_id)`* — cleanest semantics. Con: third public entry point; forbidden by FR-API-1.
+  - *`run(..., resume_run_id=str)`* — reuses existing entry point. Con: changes the invariant that every `with run(...)` produces exactly one new `runs` row (FR-API-2/3); complicates `_RunFactory.__enter__` to branch on resume vs. open.
+  - **Deferred to v2 with child-run workaround in v1 (chosen)** — Pattern 1 (child run via `parent_run_id`) is the supported v1 shape; documented in `docs/3_guides/orchestrator_handoff.md`.
+- **Rationale for current pick:** FR-API-1 is Tier-1 gating; cannot add a third callable in v1. The child-run pattern covers the gate-review use case with one extra join. Adapter changes for resume (open_or_resume semantics, no new `start_ts`) are straightforward but belong in v2 alongside the schema version bump.
+- **Revisit trigger:** v2 (major version); requires FR-API-1 gate renegotiation in PRD revision.
+
+---
+
+### v2 — `RunHandle.add_example(...)` public method
+
+- **Decision:** deferred to v2
+- **Date:** 2026-05-06
+- **Context:** Atlas needs to record rejection examples programmatically from inside an active run, without constructing `Example` entities directly or calling the adapter layer. FR-API-4 mandates exactly four user-facing methods on `RunHandle` (`add_score`, `add_span`, `set_models`, `abort`) in v1; a fifth method violates this Tier-1 gating constraint.
+- **Options considered:**
+  - *Add `r.add_example(inputs_hash, *, expected_output_hash=None, source, rubric=None)` in v1* — Con: violates FR-API-4 (exactly four methods); sets precedent for gate creep.
+  - *Power-user adapter path (undocumented)* — `SQLiteStorageAdapter.write_example` is accessible but not a stable contract.
+  - **Defer to v2 + document adapter path (chosen)** — callers who need programmatic example writes in v1 use `storage.write_example(Example(...))` directly; the CLI `plumb example promote` handles the common case.
+- **Rationale for current pick:** FR-API-4 is Tier-1 gating. The CLI path covers atlas's review workflow; adapter-direct is the escape hatch for automation. A clean `RunHandle.add_example` belongs in v2 once the surface gate is renegotiated.
+- **Revisit trigger:** v2 (major version); requires FR-API-4 gate renegotiation in PRD revision.
+
+---
+
 *End of backlog. Append new entries at the bottom of the appropriate group.*

@@ -308,8 +308,14 @@ class RunHandle:
         value_label: str | None = None,
         span_id: str | None = None,
         scorer_version: str | None = None,
+        rationale: str | None = None,
     ) -> str:
-        """Buffer a score; returns score_id. No-op after abort()."""
+        """Buffer a score; returns score_id. No-op after abort().
+
+        ``rationale`` is carried in-memory and surfaced on the ``Score`` entity.
+        It is not yet persisted to the SQLite ``scores`` table (no column exists
+        in v1; the column and full durability land in v2 — see deferred-features.md).
+        """
         if self._builder.aborted:
             return ""
         # XOR validation — raises synchronously
@@ -330,6 +336,7 @@ class RunHandle:
             span_id=span_id,
             value_numeric=value_numeric,
             value_label=value_label,
+            rationale=rationale,
         )
         self._builder.scores.append(score)
         return score_id

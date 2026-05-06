@@ -1,6 +1,12 @@
 """Minimal FastAPI stub — full HTTP service implemented in a future slice."""
 
-from fastapi import FastAPI
+try:
+    from fastapi import FastAPI
+except ImportError as _e:
+    raise ImportError(
+        "plumb HTTP service requires 'fastapi' and 'uvicorn'. "
+        "Install them with: pip install 'plumb[http]'"
+    ) from _e
 
 app = FastAPI(title="plumb")
 
