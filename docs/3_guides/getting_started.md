@@ -248,10 +248,85 @@ plumb judge run --metric routing_top1 --model gpt-4o
 plumb ships a read-only HTTP service useful for querying recorded runs from notebooks or ad-hoc scripts:
 
 ```bash
-plumb serve   # binds 127.0.0.1:8765 by default
+plumb serve                          # binds 127.0.0.1:8765 by default
+plumb serve --port 9000              # custom port
+plumb serve --host 0.0.0.0 --port 9000  # ⚠ non-loopback — see security note below
 ```
 
-The service is read-only and binds to loopback only. It requires the SQLite adapter to be configured.
+The service exposes five endpoints. All are GET-only — no writes are possible through HTTP.
+
+### `GET /health` — liveness probe
+
+```bash
+curl -s http://127.0.0.1:8765/health
+# {"status":"ok"}
+```
+
+### `GET /runs` — paginated run list
+
+```bash
+# All runs (default limit=100)
+curl -s http://127.0.0.1:8765/runs | python3 -m json.tool
+
+# Last 7 days, offline runs only, page 2
+curl -s "http://127.0.0.1:8765/runs?since=7d&kind=offline&limit=50&offset=50"
+
+# Filter to a specific task
+curl -s "http://127.0.0.1:8765/runs?task_id=summarise&limit=20"
+```
+
+Query parameters: `since` (ISO-8601 or relative: `7d`, `2w`, `1h`, `30m`), `task_id`, `kind` (`offline`|`online`), `limit` (1–500, default 100), `offset` (default 0).
+
+### `GET /runs/{run_id}` — run detail with spans and scores
+
+```bash
+# Replace <run_id> with a 32-char lowercase hex ID from /runs
+curl -s http://127.0.0.1:8765/runs/a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4 | python3 -m json.tool
+```
+
+The response includes the run row, all spans (root spans first, then by `parent_span_id`/`span_id`), and all scores. Span `input_hash` and `output_hash` are 64-char hex SHA-256 values — blob bodies are never inlined. To read a blob:
+
+```bash
+# Blob files live at: $PLUMB_DATA_DIR/blobs/<sha[:2]>/<sha[2:]>
+# Example for hash aabbcc...ff (64 chars):
+cat ~/.plumb/blobs/aa/bbcc...ff
+```
+
+### `GET /examples` — regression-set examples
+
+```bash
+# All examples
+curl -s http://127.0.0.1:8765/examples
+
+# Active examples for a specific task
+curl -s "http://127.0.0.1:8765/examples?task_id=summarise&active=true"
+```
+
+Query parameters: `task_id`, `active` (`true`|`false`). No pagination — the examples table is intentionally bounded in v1.
+
+### `GET /stats/task/{task_id}` — aggregated task statistics
+
+```bash
+# v1 ten-metric cut for a task
+curl -s http://127.0.0.1:8765/stats/task/summarise | python3 -m json.tool
+
+# Restrict to the last 30 days
+curl -s "http://127.0.0.1:8765/stats/task/summarise?since=30d"
+```
+
+Returns run-level metrics (latency p50/p95, dollar cost, tokens, completion rate, intervention rate) and scored metrics (tool call validity, routing top-1, etc.) for the task. Returns 404 if no runs match the window.
+
+### Interactive API docs
+
+With the server running, open these in a browser:
+
+- **Swagger UI** — <http://127.0.0.1:8765/docs>
+- **ReDoc** — <http://127.0.0.1:8765/redoc>
+- **OpenAPI JSON** — <http://127.0.0.1:8765/openapi.json>
+
+### Security note
+
+The service binds to `127.0.0.1` only by default. No authentication is implemented because loopback-only + single-user machine + read-only endpoints is the accepted security posture for plumb's "No SaaS, single-user" constraint — see [TRD §5.3 Assumption 3](../2_architecture/TRD.md#53-assumptions). If you expose the service on a non-loopback interface (`--host 0.0.0.0`), all local network users can read your run data; add your own reverse proxy with authentication if this is unacceptable.
 
 ---
 
