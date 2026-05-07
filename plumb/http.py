@@ -7,7 +7,8 @@ All routes are read-only; no POST/PUT/DELETE/PATCH verbs exist.
 from __future__ import annotations
 
 try:
-    from fastapi import Depends, FastAPI, HTTPException, Path, Query
+    from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
+    from fastapi.responses import JSONResponse
 except ImportError as _e:
     raise ImportError(
         "plumb HTTP service requires 'fastapi' and 'uvicorn'. "
@@ -15,6 +16,7 @@ except ImportError as _e:
     ) from _e
 
 import logging
+import sqlite3
 from datetime import datetime
 from typing import Annotated
 
@@ -31,9 +33,12 @@ from plumb._http_schemas import (
     RunSummaryOut,
     ScoreOut,
     SpanOut,
+    StatsOut,
 )
+from plumb._http_stats import NotFoundError as StatsNotFoundError, compute_task_stats
 from plumb._time_utils import parse_since
 from plumb.core.entities import RunSummaryRow
+from plumb.core.errors import StorageError
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +330,86 @@ def list_examples(
     ]
 
     return ExampleListOut(items=example_outs)
+
+
+@app.get(
+    "/stats/task/{task_id}",
+    response_model=StatsOut,
+    responses={404: {"model": ErrorOut}},
+    tags=["stats"],
+    summary="Get aggregated task statistics",
+    description=(
+        "Return the v1 ten-metric cut for ``task_id``, optionally filtered "
+        "by ``since``. Returns 404 if no runs match the window."
+    ),
+)
+def get_task_stats(
+    task_id: Annotated[
+        str,
+        Path(min_length=1, max_length=255, description="Task identifier."),
+    ],
+    since: Annotated[
+        str | None,
+        Query(description="ISO-8601 datetime or relative (7d, 2w, 1h, 30m)."),
+    ] = None,
+    pool: Annotated[StoragePool, Depends(get_pool)] = ...,  # type: ignore[assignment]
+) -> StatsOut:
+    """Return aggregated v1 ten-metric statistics for a task.
+
+    Args:
+        task_id: The task identifier to aggregate over.
+        since: Optional time filter. Relative (``7d``) or ISO-8601.
+        pool: Injected storage pool.
+
+    Returns:
+        A ``StatsOut`` with all ten v1 metric fields.
+
+    Raises:
+        HTTPException: 422 if ``since`` cannot be parsed.
+        HTTPException: 404 if no runs exist for the task in the window.
+    """
+    since_dt = _parse_since_or_422(since)
+
+    with pool.acquire() as reader:
+        try:
+            return compute_task_stats(reader, task_id, since_dt)
+        except StatsNotFoundError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail={"error_type": "not_found", "detail": str(exc)},
+            ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Exception handlers
+# ---------------------------------------------------------------------------
+
+
+@app.exception_handler(StorageError)
+async def _storage_error_handler(request: Request, exc: StorageError) -> JSONResponse:
+    """Convert StorageError to a 500 JSON envelope without leaking internals."""
+    logger.warning("StorageError on %s: %s", request.url.path, type(exc).__name__)
+    return JSONResponse(
+        status_code=500,
+        content={"error_type": "plumb_internal_error", "detail": "Storage error"},
+    )
+
+
+@app.exception_handler(sqlite3.OperationalError)
+async def _sqlite_busy_handler(request: Request, exc: sqlite3.OperationalError) -> JSONResponse:
+    """Convert SQLite busy/locked errors to 503."""
+    msg = str(exc).lower()
+    if "locked" in msg or "busy" in msg:
+        logger.warning("Database busy on %s", request.url.path)
+        return JSONResponse(
+            status_code=503,
+            content={"error_type": "service_busy", "detail": "Database busy; retry"},
+        )
+    logger.warning("SQLite OperationalError on %s: %s", request.url.path, type(exc).__name__)
+    return JSONResponse(
+        status_code=500,
+        content={"error_type": "plumb_internal_error", "detail": "Storage error"},
+    )
 
 
 # ---------------------------------------------------------------------------

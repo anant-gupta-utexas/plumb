@@ -114,6 +114,18 @@ class StorageReader(Protocol):
         task_id: str | None = None,
         active: bool | None = None,
     ) -> list[Example]: ...
+    def aggregate_runs_for_task(
+        self,
+        task_id: str,
+        *,
+        since: datetime | None = None,
+    ) -> object: ...
+    def aggregate_scores_for_task(
+        self,
+        task_id: str,
+        *,
+        since: datetime | None = None,
+    ) -> list[object]: ...
 
 
 @runtime_checkable

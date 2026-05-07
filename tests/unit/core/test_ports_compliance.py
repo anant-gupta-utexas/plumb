@@ -135,6 +135,22 @@ class FakeStorageReader:
     ) -> tuple[list, int]:
         return [], 0
 
+    def aggregate_runs_for_task(
+        self,
+        task_id: str,
+        *,
+        since: datetime | None = None,
+    ) -> object:
+        return None
+
+    def aggregate_scores_for_task(
+        self,
+        task_id: str,
+        *,
+        since: datetime | None = None,
+    ) -> list[object]:
+        return []
+
 
 class FakeBlobStore:
     def __init__(self) -> None:

@@ -7,6 +7,7 @@ import os
 import sqlite3
 import threading
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,54 @@ from plumb.core.errors import StorageError, ValidationError
 from plumb.core.ports import Clock
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class TaskRunAggregate:
+    """Run-level aggregates for a task within a time window.
+
+    Attributes:
+        task_id: The task identifier aggregated over.
+        run_count: Total number of matching runs.
+        success_count: Runs with status ``success``.
+        failure_count: Runs with status ``failure``.
+        aborted_count: Runs with status ``aborted``.
+        stalled_count: Runs with status ``stalled``.
+        latency_ms_values: List of end-to-end latency values in ms (for percentile compute).
+        dollar_cost_total: Sum of ``dollar_cost`` across all matching runs.
+        tokens_in_total: Sum of ``tokens_in`` across all matching runs.
+        tokens_out_total: Sum of ``tokens_out`` across all matching runs.
+        successful_tokens_total: Combined token total for successful runs only.
+    """
+
+    task_id: str
+    run_count: int
+    success_count: int
+    failure_count: int
+    aborted_count: int
+    stalled_count: int
+    latency_ms_values: list[float]
+    dollar_cost_total: float | None
+    tokens_in_total: int | None
+    tokens_out_total: int | None
+    successful_tokens_total: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class ScoreAggregateRow:
+    """Score aggregates for a single (metric_name, scorer) pair.
+
+    Attributes:
+        metric_name: The metric being aggregated.
+        scorer: The scorer kind string.
+        value_numeric_list: All numeric values for this pair.
+        value_label_list: All label values for this pair.
+    """
+
+    metric_name: str
+    scorer: str
+    value_numeric_list: list[float]
+    value_label_list: list[str]
 
 
 def _row_to_run_summary(row: sqlite3.Row) -> RunSummaryRow:
@@ -666,6 +715,127 @@ class SQLiteStorageAdapter:
 
         total: int = count_row["total"] if count_row else 0
         return [_row_to_run_summary(r) for r in rows], total
+
+    def aggregate_runs_for_task(
+        self,
+        task_id: str,
+        *,
+        since: datetime | None = None,
+    ) -> TaskRunAggregate:
+        """Return run-level aggregates for a task within the given time window.
+
+        Args:
+            task_id: Task identifier to aggregate over.
+            since: Only include runs started at or after this datetime.
+
+        Returns:
+            A ``TaskRunAggregate`` with counts, cost sums, and latency values.
+        """
+        since_iso = _dt_to_iso(since)
+        row = self._conn.execute(  # noqa: S608 — no user values interpolated; all bind via ?
+            """
+            SELECT
+                COUNT(*)                                        AS run_count,
+                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS success_count,
+                SUM(CASE WHEN status = 'failure' THEN 1 ELSE 0 END) AS failure_count,
+                SUM(CASE WHEN status = 'aborted' THEN 1 ELSE 0 END) AS aborted_count,
+                SUM(CASE WHEN status = 'stalled' THEN 1 ELSE 0 END) AS stalled_count,
+                SUM(dollar_cost)                                AS dollar_cost_total,
+                SUM(tokens_in)                                  AS tokens_in_total,
+                SUM(tokens_out)                                 AS tokens_out_total,
+                SUM(
+                    CASE WHEN status = 'success'
+                    THEN COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)
+                    ELSE 0 END
+                )                                               AS successful_tokens_total
+            FROM runs
+            WHERE task_id = ?
+              AND (? IS NULL OR start_ts >= ?)
+            """,
+            (task_id, since_iso, since_iso),
+        ).fetchone()
+
+        # Fetch latency values for Python-side percentile computation.
+        latency_rows = self._conn.execute(  # noqa: S608 — no user values interpolated
+            """
+            SELECT (julianday(end_ts) - julianday(start_ts)) * 86400000.0 AS latency_ms
+            FROM runs
+            WHERE task_id = ?
+              AND (? IS NULL OR start_ts >= ?)
+              AND end_ts IS NOT NULL
+            """,
+            (task_id, since_iso, since_iso),
+        ).fetchall()
+
+        latency_values = [r["latency_ms"] for r in latency_rows if r["latency_ms"] is not None]
+
+        successful_tokens: int | None = None
+        if row["successful_tokens_total"] is not None and row["success_count"] > 0:
+            successful_tokens = int(row["successful_tokens_total"])
+
+        return TaskRunAggregate(
+            task_id=task_id,
+            run_count=row["run_count"] or 0,
+            success_count=row["success_count"] or 0,
+            failure_count=row["failure_count"] or 0,
+            aborted_count=row["aborted_count"] or 0,
+            stalled_count=row["stalled_count"] or 0,
+            latency_ms_values=latency_values,
+            dollar_cost_total=row["dollar_cost_total"],
+            tokens_in_total=row["tokens_in_total"],
+            tokens_out_total=row["tokens_out_total"],
+            successful_tokens_total=successful_tokens,
+        )
+
+    def aggregate_scores_for_task(
+        self,
+        task_id: str,
+        *,
+        since: datetime | None = None,
+    ) -> list[ScoreAggregateRow]:
+        """Return score aggregates grouped by (metric_name, scorer) for a task.
+
+        Args:
+            task_id: Task identifier to aggregate over.
+            since: Only include scores on runs started at or after this datetime.
+
+        Returns:
+            A list of ``ScoreAggregateRow`` instances, one per (metric_name, scorer) pair.
+        """
+        since_iso = _dt_to_iso(since)
+        rows = self._conn.execute(  # noqa: S608 — no user values interpolated; all bind via ?
+            """
+            SELECT sc.metric_name, sc.scorer, sc.value_numeric, sc.value_label
+            FROM scores sc
+            JOIN runs r ON r.run_id = sc.run_id
+            WHERE r.task_id = ?
+              AND (? IS NULL OR r.start_ts >= ?)
+            ORDER BY sc.metric_name, sc.scorer
+            """,
+            (task_id, since_iso, since_iso),
+        ).fetchall()
+
+        # Group by (metric_name, scorer).
+        groups: dict[tuple[str, str], tuple[list[float], list[str]]] = {}
+        for r in rows:
+            key = (r["metric_name"], r["scorer"])
+            if key not in groups:
+                groups[key] = ([], [])
+            nums, labels = groups[key]
+            if r["value_numeric"] is not None:
+                nums.append(float(r["value_numeric"]))
+            if r["value_label"] is not None:
+                labels.append(str(r["value_label"]))
+
+        return [
+            ScoreAggregateRow(
+                metric_name=metric_name,
+                scorer=scorer,
+                value_numeric_list=nums,
+                value_label_list=labels,
+            )
+            for (metric_name, scorer), (nums, labels) in groups.items()
+        ]
 
     # -------------------------------------------------------------------------
     # Lifecycle
