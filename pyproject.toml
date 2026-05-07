@@ -1,6 +1,6 @@
 [project]
 name = "plumb"
-version = "0.1.0"
+version = "1.0.0"
 description = "A measurement spine for orchestrator + sub-agent systems: four-table SQLite schema with decorator + context-manager entry points."
 readme = "README.md"
 requires-python = ">=3.13"
