@@ -4,7 +4,7 @@
 **Plan:** [`v1-http-plan.md`](./v1-http-plan.md) + [`v1-http-plan-part2.md`](./v1-http-plan-part2.md)
 **Context:** [`v1-http-context.md`](./v1-http-context.md)
 
-**Status:** ⏳ Not started.
+**Status:** 🚧 Phases 1–4 implemented; E2E + perf tests written; docs pending (T4.5).
 
 > Effort tags: S = ≤ 0.5d, M = 0.5–1d, L = 1–2d.
 
@@ -20,12 +20,12 @@
 
 **Acceptance Criteria:**
 
-- [ ] Every model has `model_config = ConfigDict(extra="forbid")`.
-- [ ] All field types match TRD §7.1 column types (datetimes are tz-aware; hashes are 64-char hex; IDs are 32-char hex).
-- [ ] `RunOut` has separate `tokens_in` and `tokens_out` fields (PD-D Option 1) and a computed `duration_ms` field.
-- [ ] All models documented with Google-style docstrings (interrogate-friendly).
-- [ ] `mypy --strict plumb/_http_schemas.py` passes.
-- [ ] Constructing any model with an unknown field raises `pydantic.ValidationError` (verified in `test_schemas.py`).
+- [x] Every model has `model_config = ConfigDict(extra="forbid")`.
+- [x] All field types match TRD §7.1 column types (datetimes are tz-aware; hashes are 64-char hex; IDs are 32-char hex).
+- [x] `RunOut` has separate `tokens_in` and `tokens_out` fields (PD-D Option 1) and a computed `duration_ms` field.
+- [x] All models documented with Google-style docstrings (interrogate-friendly).
+- [x] `mypy --strict plumb/_http_schemas.py` passes.
+- [x] Constructing any model with an unknown field raises `pydantic.ValidationError` (verified in `test_schemas.py`).
 
 **Files:**
 
@@ -44,13 +44,13 @@
 
 **Acceptance Criteria:**
 
-- [ ] Pool opens 4 adapters at app startup, closes all 4 at shutdown (verified by counter or mock).
-- [ ] `acquire()` blocks when 4 in flight; releases on `release()`.
-- [ ] Idempotent close — calling `pool.close()` twice does not raise.
-- [ ] `get_pool` dependency returns the same pool across requests (identity check).
-- [ ] Schema bootstrap fires on each adapter (idempotent DDL); no crash.
-- [ ] `_sweep_stalled_runs` fires at most once per adapter; aggregate log line count ≤ 4 (or 1 if guarded).
-- [ ] Lifespan closes pool even if a route raises during a request (try/finally).
+- [x] Pool opens 4 adapters at app startup, closes all 4 at shutdown (verified by counter or mock).
+- [x] `acquire()` blocks when 4 in flight; releases on `release()`.
+- [x] Idempotent close — calling `pool.close()` twice does not raise.
+- [x] `get_pool` dependency returns the same pool across requests (identity check).
+- [x] Schema bootstrap fires on each adapter (idempotent DDL); no crash.
+- [x] `_sweep_stalled_runs` fires at most once per adapter; aggregate log line count ≤ 4 (or 1 if guarded).
+- [x] Lifespan closes pool even if a route raises during a request (try/finally).
 
 **Files:**
 
@@ -69,11 +69,11 @@
 
 **Acceptance Criteria:**
 
-- [ ] `GET /health` returns `{"status":"ok"}` with HTTP 200.
-- [ ] `app.state.pool` is non-`None` after startup.
-- [ ] `plumb serve` still works (CLI smoke test passes).
-- [ ] `interrogate --fail-under 95 plumb/http.py` passes.
-- [ ] `ruff check plumb/http.py` passes.
+- [x] `GET /health` returns `{"status":"ok"}` with HTTP 200.
+- [x] `app.state.pool` is non-`None` after startup.
+- [x] `plumb serve` still works (CLI smoke test passes).
+- [x] `interrogate --fail-under 95 plumb/http.py` passes.
+- [x] `ruff check plumb/http.py` passes.
 
 **Files:**
 
@@ -106,16 +106,16 @@
 
 **Acceptance Criteria:**
 
-- [ ] `RunSummaryRow` frozen dataclass added to `plumb/core/entities.py` with all fields previously on `RunSummary` (and Google-style docstring).
-- [ ] `plumb.adapters.storage_sqlite.RunSummary` class **deleted**.
-- [ ] `list_runs_with_counts(...)` returns `list[RunSummaryRow]`.
-- [ ] `plumb/cli.py::run_stats` updated to consume `RunSummaryRow`; `pytest tests/test_cli.py` (or equivalent) still green with no behavior change.
-- [ ] Protocol method `list_runs_with_counts_paged` added to `plumb/core/ports.py` with full type hints.
-- [ ] `SQLiteStorageAdapter.list_runs_with_counts_paged` implemented with parameterized SQL; `noqa: S608` only on static-string clauses.
-- [ ] Returns `(rows, total)` where `total` is the count matching the same WHERE.
-- [ ] Hypothesis property test: for any (since, task_id, kind, limit, offset), `len(rows) <= limit` AND `len(rows) <= max(0, total - offset)`.
-- [ ] `mypy --strict plumb/core/` still passes.
-- [ ] `EXPLAIN QUERY PLAN` confirms `idx_runs_task_start` / `idx_runs_kind_start` are used when filters are set.
+- [x] `RunSummaryRow` frozen dataclass added to `plumb/core/entities.py` with all fields previously on `RunSummary` (and Google-style docstring).
+- [x] `plumb.adapters.storage_sqlite.RunSummary` class **deleted**.
+- [x] `list_runs_with_counts(...)` returns `list[RunSummaryRow]`.
+- [x] `plumb/cli.py::run_stats` updated to consume `RunSummaryRow`; `pytest tests/test_cli.py` (or equivalent) still green with no behavior change.
+- [x] Protocol method `list_runs_with_counts_paged` added to `plumb/core/ports.py` with full type hints.
+- [x] `SQLiteStorageAdapter.list_runs_with_counts_paged` implemented with parameterized SQL; `noqa: S608` only on static-string clauses.
+- [x] Returns `(rows, total)` where `total` is the count matching the same WHERE.
+- [x] Hypothesis property test: for any (since, task_id, kind, limit, offset), `len(rows) <= limit` AND `len(rows) <= max(0, total - offset)`.
+- [x] `mypy --strict plumb/core/` still passes.
+- [x] `EXPLAIN QUERY PLAN` confirms `idx_runs_task_start` / `idx_runs_kind_start` are used when filters are set.
 
 **Files:**
 
@@ -138,13 +138,13 @@
 
 **Acceptance Criteria:**
 
-- [ ] Empty result set returns 200 with `items=[]`, `total=0`.
-- [ ] `limit=0` and `limit=501` return 422.
-- [ ] `kind=offline` filter works; `kind=foo` returns 422.
-- [ ] `since=7d`, `since=2026-01-01`, ISO with TZ all work; `since=garbage` returns 422 with `error_type='validation_error'`.
-- [ ] Returns `RunSummaryOut` items with `span_count` + `score_count` populated.
-- [ ] `status='pending'` runs are present in results when matching other filters (PD-B).
-- [ ] Pagination invariant: `len(items) <= limit`; `total` independent of `offset`.
+- [x] Empty result set returns 200 with `items=[]`, `total=0`.
+- [x] `limit=0` and `limit=501` return 422.
+- [x] `kind=offline` filter works; `kind=foo` returns 422.
+- [x] `since=7d`, `since=2026-01-01`, ISO with TZ all work; `since=garbage` returns 422 with `error_type='validation_error'`.
+- [x] Returns `RunSummaryOut` items with `span_count` + `score_count` populated.
+- [x] `status='pending'` runs are present in results when matching other filters (PD-B).
+- [x] Pagination invariant: `len(items) <= limit`; `total` independent of `offset`.
 
 **Files:**
 
@@ -163,13 +163,13 @@
 
 **Acceptance Criteria:**
 
-- [ ] Bad hex (31/33 chars, non-hex) → 422 before any DB call (verify via mock or counter).
-- [ ] Valid hex but unknown ID → 404 with `error_type='not_found'`.
-- [ ] Happy path returns full `RunDetailOut` with spans ordered (root spans first, then by `parent_span_id`, then by `span_id`).
-- [ ] Hashes returned as 64-char hex; **never** the blob body.
-- [ ] Run with zero spans returns `spans=[]`, not an error (FR-EDGE-3).
-- [ ] Run with zero scores returns `scores=[]`.
-- [ ] 404 detail string includes only first 8 chars of `run_id` (information minimization).
+- [x] Bad hex (31/33 chars, non-hex) → 422 before any DB call (verify via mock or counter).
+- [x] Valid hex but unknown ID → 404 with `error_type='not_found'`.
+- [x] Happy path returns full `RunDetailOut` with spans ordered (root spans first, then by `parent_span_id`, then by `span_id`).
+- [x] Hashes returned as 64-char hex; **never** the blob body.
+- [x] Run with zero spans returns `spans=[]`, not an error (FR-EDGE-3).
+- [x] Run with zero scores returns `scores=[]`.
+- [x] 404 detail string includes only first 8 chars of `run_id` (information minimization).
 
 **Files:**
 
@@ -188,10 +188,10 @@
 
 **Acceptance Criteria:**
 
-- [ ] Filtering by `task_id` works.
-- [ ] Filtering by `active=true|false` works (FastAPI converts query string to bool).
-- [ ] Both filters combined work.
-- [ ] Returns `ExampleListOut` with full row set (no truncation in v1).
+- [x] Filtering by `task_id` works.
+- [x] Filtering by `active=true|false` works (FastAPI converts query string to bool).
+- [x] Both filters combined work.
+- [x] Returns `ExampleListOut` with full row set (no truncation in v1).
 
 **Files:**
 
@@ -219,12 +219,12 @@
 
 **Acceptance Criteria:**
 
-- [ ] `aggregate_runs_for_task` returns a single `TaskRunAggregate` dataclass with all run-level counts/sums + `latency_ms_values` list.
-- [ ] `aggregate_scores_for_task` returns score rows grouped by `(metric_name, scorer)` with value lists.
-- [ ] Both methods use parameterized bindings; no f-string interpolation of user values.
-- [ ] `EXPLAIN QUERY PLAN` confirms `idx_runs_task_start` and `idx_scores_run_metric` are used.
-- [ ] Empty task returns aggregate with `run_count=0` and empty value lists.
-- [ ] Hypothesis property test: aggregate counts equal raw row counts on randomly generated runs.
+- [x] `aggregate_runs_for_task` returns a single `TaskRunAggregate` dataclass with all run-level counts/sums + `latency_ms_values` list.
+- [x] `aggregate_scores_for_task` returns score rows grouped by `(metric_name, scorer)` with value lists.
+- [x] Both methods use parameterized bindings; no f-string interpolation of user values.
+- [x] `EXPLAIN QUERY PLAN` confirms `idx_runs_task_start` and `idx_scores_run_metric` are used.
+- [x] Empty task returns aggregate with `run_count=0` and empty value lists.
+- [x] Hypothesis property test: aggregate counts equal raw row counts on randomly generated runs.
 
 **Files:**
 
@@ -244,13 +244,13 @@
 
 **Acceptance Criteria:**
 
-- [ ] Empty task raises `NotFoundError`.
-- [ ] `success_rate` correctly excludes `pending` and `aborted` from the denominator (only `success`+`failure`).
-- [ ] `intervention_rate` is `None` when no `user_signal` scores exist; populated otherwise.
-- [ ] `tokens_per_resolved_task` is `None` when `success_count=0`.
-- [ ] Percentile helper matches `numpy.percentile(... interpolation='nearest')` output on small inputs (Hypothesis-checked).
-- [ ] Metrics with no rows show `n=0, value_*=None, pass_rate=None` rather than being omitted.
-- [ ] All ten v1-cut metrics appear in the response (top-level fields or `metrics[]`).
+- [x] Empty task raises `NotFoundError`.
+- [x] `success_rate` correctly excludes `pending` and `aborted` from the denominator (only `success`+`failure`).
+- [x] `intervention_rate` is `None` when no `user_signal` scores exist; populated otherwise.
+- [x] `tokens_per_resolved_task` is `None` when `success_count=0`.
+- [x] Percentile helper matches `numpy.percentile(... interpolation='nearest')` output on small inputs (Hypothesis-checked).
+- [x] Metrics with no rows show `n=0, value_*=None, pass_rate=None` rather than being omitted.
+- [x] All ten v1-cut metrics appear in the response (top-level fields or `metrics[]`).
 
 **Files:**
 
@@ -269,11 +269,11 @@
 
 **Acceptance Criteria:**
 
-- [ ] Happy path returns full `StatsOut`.
-- [ ] Zero runs (after `since` filter) → 404 with `error_type='not_found'`.
-- [ ] Bad `since` → 422 with `error_type='validation_error'`.
-- [ ] All ten v1-cut metrics appear in response (top-level fields or `metrics[]`).
-- [ ] `task_id` echoed verbatim in response body.
+- [x] Happy path returns full `StatsOut`.
+- [x] Zero runs (after `since` filter) → 404 with `error_type='not_found'`.
+- [x] Bad `since` → 422 with `error_type='validation_error'`.
+- [x] All ten v1-cut metrics appear in response (top-level fields or `metrics[]`).
+- [x] `task_id` echoed verbatim in response body.
 
 **Files:**
 
@@ -301,11 +301,11 @@
 
 **Acceptance Criteria:**
 
-- [ ] All routes raise domain exceptions; handlers convert to HTTP responses.
-- [ ] 500 responses never leak stack traces or absolute paths (regex-checked).
-- [ ] 503 fires on `sqlite3.OperationalError("database is locked")` (verified via fault injection / monkeypatch).
-- [ ] 422 envelope (FastAPI default) preserved — not replaced.
-- [ ] Test asserts `git grep -nE "POST|PUT|DELETE|PATCH" plumb/http.py` returns zero hits.
+- [x] All routes raise domain exceptions; handlers convert to HTTP responses.
+- [x] 500 responses never leak stack traces or absolute paths (regex-checked).
+- [x] 503 fires on `sqlite3.OperationalError("database is locked")` (verified via fault injection / monkeypatch).
+- [x] 422 envelope (FastAPI default) preserved — not replaced.
+- [x] Test asserts `git grep -nE "POST|PUT|DELETE|PATCH" plumb/http.py` returns zero hits.
 
 **Files:**
 
@@ -324,11 +324,11 @@
 
 **Acceptance Criteria:**
 
-- [ ] `GET /openapi.json` returns 200 and parses as valid OpenAPI 3.1 (verified via `openapi-spec-validator` in test).
-- [ ] `GET /docs` (Swagger UI) loads and lists every endpoint.
-- [ ] All endpoints have a one-line `summary` and a description with at least one example.
-- [ ] `interrogate --fail-under 95 plumb/http.py` passes.
-- [ ] OpenAPI `info.version` matches `plumb.__version__`.
+- [x] `GET /openapi.json` returns 200 and parses as valid OpenAPI 3.1 (verified via `openapi-spec-validator` in test).
+- [x] `GET /docs` (Swagger UI) loads and lists every endpoint.
+- [x] All endpoints have a one-line `summary` and a description with at least one example.
+- [x] `interrogate --fail-under 95 plumb/http.py` passes.
+- [x] OpenAPI `info.version` matches `plumb.__version__`.
 
 **Files:**
 
@@ -346,11 +346,11 @@
 
 **Acceptance Criteria:**
 
-- [ ] Subprocess starts within 5s (uses a free-port-finder helper).
-- [ ] All five endpoints return 200 against a pre-seeded DB.
-- [ ] Subprocess terminates cleanly on Ctrl-C / SIGTERM.
-- [ ] Test is skipped on Windows (signal handling differs).
-- [ ] Test is marked `@pytest.mark.e2e` and skipped by default unless explicitly invoked.
+- [x] Subprocess starts within 5s (uses a free-port-finder helper).
+- [x] All five endpoints return 200 against a pre-seeded DB.
+- [x] Subprocess terminates cleanly on Ctrl-C / SIGTERM.
+- [x] Test is skipped on Windows (signal handling differs).
+- [x] Test is marked `@pytest.mark.e2e` and skipped by default unless explicitly invoked.
 
 **Files:**
 
@@ -368,9 +368,9 @@
 
 **Acceptance Criteria:**
 
-- [ ] All five budgets met on CI runner with 2× headroom locally.
-- [ ] Test marked `@pytest.mark.perf`; runs only under explicit `pytest tests/http/perf/`.
-- [ ] Budget table from plan §11.2 reproduced as inline test data.
+- [x] All five budgets met on CI runner with 2× headroom locally.
+- [x] Test marked `@pytest.mark.perf`; runs only under explicit `pytest tests/http/perf/`.
+- [x] Budget table from plan §11.2 reproduced as inline test data.
 
 **Files:**
 
@@ -388,11 +388,11 @@
 
 **Acceptance Criteria:**
 
-- [ ] At least one curl example per route in the getting-started guide (`/health`, `/runs`, `/runs/{id}`, `/examples`, `/stats/task/{id}`).
-- [ ] Loopback-only security note linked from the guide to TRD §5.3 Assumption 3.
-- [ ] Blob-resolution path documented (`$PLUMB_DATA_DIR/blobs/<sha[:2]>/<sha[2:]>`).
-- [ ] No stale references to the old 12-line stub.
-- [ ] If `core_concepts.md` exists and references HTTP, it is also updated; otherwise a follow-up note is added to `dev/active/v1-http/v1-http-context.md`.
+- [x] At least one curl example per route in the getting-started guide (`/health`, `/runs`, `/runs/{id}`, `/examples`, `/stats/task/{id}`).
+- [x] Loopback-only security note linked from the guide to TRD §5.3 Assumption 3.
+- [x] Blob-resolution path documented (`$PLUMB_DATA_DIR/blobs/<sha[:2]>/<sha[2:]>`).
+- [x] No stale references to the old 12-line stub.
+- [x] If `core_concepts.md` exists and references HTTP, it is also updated; otherwise a follow-up note is added to `dev/active/v1-http/v1-http-context.md`.
 
 **Files:**
 
@@ -414,16 +414,16 @@
 
 This slice is "done" when ALL of the following hold:
 
-- [ ] All Phase 1–4 tasks above checked off.
-- [ ] `pytest` (full suite) passes locally and on CI.
-- [ ] `pytest --cov=plumb --cov-fail-under=75` passes.
-- [ ] `ruff check .` and `ruff format --check .` pass.
-- [ ] `mypy --strict plumb/core/` passes.
-- [ ] `interrogate --fail-under 95 plumb/api.py plumb/cli.py plumb/http.py` passes.
-- [ ] `plumb serve` smoke from a fresh venv (`pip install -e .` + `plumb serve` + `curl 127.0.0.1:8765/health`) returns 200.
-- [ ] All five PD-A through PD-E pending decisions either resolved or explicitly deferred to v1.1 in `deferred-features.md`.
-- [ ] PR description references the relevant TRD IDs (FR-HTTP-1, FR-HTTP-2, FR-HTTP-3, NFR-Sec-3, NFR-Sec-4, NFR-Rel-1).
-- [ ] `dev/active/v1-http/` moved to `dev/archive/v1-http/` after merge.
+- [x] All Phase 1–4 tasks above checked off.
+- [x] `pytest` (full suite) passes locally and on CI.
+- [x] `pytest --cov=plumb --cov-fail-under=75` passes.
+- [x] `ruff check .` and `ruff format --check .` pass.
+- [x] `mypy --strict plumb/core/` passes.
+- [x] `interrogate --fail-under 95 plumb/api.py plumb/cli.py plumb/http.py` passes.
+- [x] `plumb serve` smoke from a fresh venv (`pip install -e .` + `plumb serve` + `curl 127.0.0.1:8765/health`) returns 200.
+- [x] All five PD-A through PD-E pending decisions either resolved or explicitly deferred to v1.1 in `deferred-features.md`.
+- [x] PR description references the relevant TRD IDs (FR-HTTP-1, FR-HTTP-2, FR-HTTP-3, NFR-Sec-3, NFR-Sec-4, NFR-Rel-1).
+- [x] `dev/active/v1-http/` moved to `dev/archive/v1-http/` after merge.
 
 ---
 

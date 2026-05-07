@@ -235,4 +235,10 @@ When this slice goes to PR review, reviewers should pay particular attention to:
 
 ---
 
+## Follow-up note (T4.5)
+
+`docs/3_guides/core_concepts.md` references the HTTP service only in a one-line table entry (`StorageReader` row). It does not describe the HTTP surface itself, so no update was required by T4.5 AC. If a future slice expands `core_concepts.md` to cover the read service in depth, add a "HTTP service" subsection that mirrors the curl examples in `getting_started.md`.
+
+---
+
 *End of context.*

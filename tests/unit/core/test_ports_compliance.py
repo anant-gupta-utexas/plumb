@@ -115,6 +115,42 @@ class FakeStorageReader:
     ) -> list[Example]:
         return []
 
+    def list_runs_with_counts(
+        self,
+        *,
+        since: datetime | None = None,
+        task_id: str | None = None,
+        limit: int = 100,
+    ) -> list:
+        return []
+
+    def list_runs_with_counts_paged(
+        self,
+        *,
+        since: datetime | None = None,
+        task_id: str | None = None,
+        kind: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list, int]:
+        return [], 0
+
+    def aggregate_runs_for_task(
+        self,
+        task_id: str,
+        *,
+        since: datetime | None = None,
+    ) -> object:
+        return None
+
+    def aggregate_scores_for_task(
+        self,
+        task_id: str,
+        *,
+        since: datetime | None = None,
+    ) -> list[object]:
+        return []
+
 
 class FakeBlobStore:
     def __init__(self) -> None:

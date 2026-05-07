@@ -235,6 +235,50 @@ class JudgeResult:
 
 
 @dataclass(frozen=True, slots=True)
+class RunSummaryRow:
+    """A run row augmented with span and score counts.
+
+    Lightweight projection used by ``plumb run stats`` (CLI) and
+    ``GET /runs`` (HTTP service). Pydantic-free; mypy-strict-clean.
+
+    Attributes:
+        run_id: 32-char lowercase hex ID.
+        task_id: Task identifier string.
+        kind: Run kind — ``offline`` or ``online``.
+        status: Run status string.
+        start_ts: ISO-8601 start timestamp string (as stored in SQLite).
+        end_ts: ISO-8601 end timestamp string, or ``None`` if pending.
+        orchestrator_model: Model string for the top-level orchestrator.
+        sub_agent_model: Model string for sub-agents, if applicable.
+        git_sha: Git commit SHA at run time, if captured.
+        tokens_in: Total input tokens consumed.
+        tokens_out: Total output tokens generated.
+        dollar_cost: Estimated dollar cost of the run.
+        error_type: Error classification string on failure.
+        parent_run_id: 32-char hex ID of the parent run, if nested.
+        span_count: Number of spans attached to this run.
+        score_count: Number of scores recorded for this run.
+    """
+
+    run_id: str
+    task_id: str
+    kind: str
+    status: str
+    start_ts: str
+    end_ts: str | None
+    orchestrator_model: str | None
+    sub_agent_model: str | None
+    git_sha: str | None
+    tokens_in: int | None
+    tokens_out: int | None
+    dollar_cost: float | None
+    error_type: str | None
+    parent_run_id: str | None
+    span_count: int
+    score_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class McNemarResult:
     """Result of a paired McNemar test."""
 

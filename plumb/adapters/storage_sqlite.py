@@ -7,6 +7,7 @@ import os
 import sqlite3
 import threading
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,7 @@ from plumb.core.entities import (
     Run,
     RunKind,
     RunStatus,
+    RunSummaryRow,
     Score,
     ScorerKind,
     Span,
@@ -28,37 +30,76 @@ from plumb.core.entities import (
 from plumb.core.errors import StorageError, ValidationError
 from plumb.core.ports import Clock
 
-# ---------------------------------------------------------------------------
-# RunSummary — lightweight projection for plumb run stats (CLI)
-# ---------------------------------------------------------------------------
-
-
-class RunSummary:
-    """A run row augmented with span and score counts (for plumb run stats)."""
-
-    __slots__ = (
-        "run_id",
-        "task_id",
-        "kind",
-        "status",
-        "start_ts",
-        "end_ts",
-        "span_count",
-        "score_count",
-    )
-
-    def __init__(self, row: sqlite3.Row) -> None:
-        self.run_id: str = row["run_id"]
-        self.task_id: str = row["task_id"]
-        self.kind: str = row["kind"]
-        self.status: str = row["status"]
-        self.start_ts: str = row["start_ts"]
-        self.end_ts: str | None = row["end_ts"]
-        self.span_count: int = row["span_count"]
-        self.score_count: int = row["score_count"]
-
-
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class TaskRunAggregate:
+    """Run-level aggregates for a task within a time window.
+
+    Attributes:
+        task_id: The task identifier aggregated over.
+        run_count: Total number of matching runs.
+        success_count: Runs with status ``success``.
+        failure_count: Runs with status ``failure``.
+        aborted_count: Runs with status ``aborted``.
+        stalled_count: Runs with status ``stalled``.
+        latency_ms_values: List of end-to-end latency values in ms (for percentile compute).
+        dollar_cost_total: Sum of ``dollar_cost`` across all matching runs.
+        tokens_in_total: Sum of ``tokens_in`` across all matching runs.
+        tokens_out_total: Sum of ``tokens_out`` across all matching runs.
+        successful_tokens_total: Combined token total for successful runs only.
+    """
+
+    task_id: str
+    run_count: int
+    success_count: int
+    failure_count: int
+    aborted_count: int
+    stalled_count: int
+    latency_ms_values: list[float]
+    dollar_cost_total: float | None
+    tokens_in_total: int | None
+    tokens_out_total: int | None
+    successful_tokens_total: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class ScoreAggregateRow:
+    """Score aggregates for a single (metric_name, scorer) pair.
+
+    Attributes:
+        metric_name: The metric being aggregated.
+        scorer: The scorer kind string.
+        value_numeric_list: All numeric values for this pair.
+        value_label_list: All label values for this pair.
+    """
+
+    metric_name: str
+    scorer: str
+    value_numeric_list: list[float]
+    value_label_list: list[str]
+
+
+def _row_to_run_summary(row: sqlite3.Row) -> RunSummaryRow:
+    return RunSummaryRow(
+        run_id=row["run_id"],
+        task_id=row["task_id"],
+        kind=row["kind"],
+        status=row["status"],
+        start_ts=row["start_ts"],
+        end_ts=row["end_ts"],
+        orchestrator_model=row["orchestrator_model"],
+        sub_agent_model=row["sub_agent_model"],
+        git_sha=row["git_sha"],
+        tokens_in=row["tokens_in"],
+        tokens_out=row["tokens_out"],
+        dollar_cost=row["dollar_cost"],
+        error_type=row["error_type"],
+        parent_run_id=row["parent_run_id"],
+        span_count=row["span_count"],
+        score_count=row["score_count"],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -576,7 +617,7 @@ class SQLiteStorageAdapter:
         since: datetime | None = None,
         task_id: str | None = None,
         limit: int = 100,
-    ) -> list[RunSummary]:
+    ) -> list[RunSummaryRow]:
         """Return runs with span and score counts (used by ``plumb run stats``).
 
         All filtering is done via parameterized bindings; no dynamic SQL predicates
@@ -587,6 +628,8 @@ class SQLiteStorageAdapter:
             """
             SELECT
                 r.run_id, r.task_id, r.kind, r.status, r.start_ts, r.end_ts,
+                r.orchestrator_model, r.sub_agent_model, r.git_sha,
+                r.tokens_in, r.tokens_out, r.dollar_cost, r.error_type, r.parent_run_id,
                 COUNT(DISTINCT s.span_id)   AS span_count,
                 COUNT(DISTINCT sc.score_id) AS score_count
             FROM runs r
@@ -601,7 +644,198 @@ class SQLiteStorageAdapter:
             """,
             (since_iso, since_iso, task_id, task_id, limit),
         ).fetchall()
-        return [RunSummary(r) for r in rows]
+        return [_row_to_run_summary(r) for r in rows]
+
+    def list_runs_with_counts_paged(
+        self,
+        *,
+        since: datetime | None = None,
+        task_id: str | None = None,
+        kind: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[RunSummaryRow], int]:
+        """Return a page of runs with counts and the total matching count.
+
+        Both the page query and the COUNT query use the same WHERE clause so
+        they observe a consistent snapshot under WAL.
+
+        Args:
+            since: Only include runs started at or after this datetime.
+            task_id: Filter to a specific task identifier.
+            kind: Filter by run kind (``"offline"`` or ``"online"``).
+            limit: Maximum number of rows to return.
+            offset: Number of rows to skip before returning results.
+
+        Returns:
+            A tuple of ``(rows, total)`` where ``total`` is the count of all
+            matching runs regardless of ``limit``/``offset``.
+        """
+        if kind is not None:
+            try:
+                RunKind(kind)
+            except ValueError as exc:
+                raise ValidationError(f"Invalid kind: {kind!r}") from exc
+
+        since_iso = _dt_to_iso(since)
+
+        rows = self._conn.execute(  # noqa: S608 — no user values interpolated; all bind via ?
+            """
+            SELECT
+                r.run_id, r.task_id, r.kind, r.status, r.start_ts, r.end_ts,
+                r.orchestrator_model, r.sub_agent_model, r.git_sha,
+                r.tokens_in, r.tokens_out, r.dollar_cost, r.error_type, r.parent_run_id,
+                COUNT(DISTINCT s.span_id)   AS span_count,
+                COUNT(DISTINCT sc.score_id) AS score_count
+            FROM runs r
+            LEFT JOIN spans  s  ON s.run_id  = r.run_id
+            LEFT JOIN scores sc ON sc.run_id = r.run_id
+            WHERE
+                (? IS NULL OR r.start_ts >= ?)
+                AND (? IS NULL OR r.task_id = ?)
+                AND (? IS NULL OR r.kind = ?)
+            GROUP BY r.run_id
+            ORDER BY r.start_ts DESC
+            LIMIT ? OFFSET ?
+            """,
+            (since_iso, since_iso, task_id, task_id, kind, kind, limit, offset),
+        ).fetchall()
+
+        count_row = self._conn.execute(  # noqa: S608 — no user values interpolated; all bind via ?
+            """
+            SELECT COUNT(*) AS total
+            FROM runs r
+            WHERE
+                (? IS NULL OR r.start_ts >= ?)
+                AND (? IS NULL OR r.task_id = ?)
+                AND (? IS NULL OR r.kind = ?)
+            """,
+            (since_iso, since_iso, task_id, task_id, kind, kind),
+        ).fetchone()
+
+        total: int = count_row["total"] if count_row else 0
+        return [_row_to_run_summary(r) for r in rows], total
+
+    def aggregate_runs_for_task(
+        self,
+        task_id: str,
+        *,
+        since: datetime | None = None,
+    ) -> TaskRunAggregate:
+        """Return run-level aggregates for a task within the given time window.
+
+        Args:
+            task_id: Task identifier to aggregate over.
+            since: Only include runs started at or after this datetime.
+
+        Returns:
+            A ``TaskRunAggregate`` with counts, cost sums, and latency values.
+        """
+        since_iso = _dt_to_iso(since)
+        row = self._conn.execute(  # noqa: S608 — no user values interpolated; all bind via ?
+            """
+            SELECT
+                COUNT(*)                                        AS run_count,
+                SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS success_count,
+                SUM(CASE WHEN status = 'failure' THEN 1 ELSE 0 END) AS failure_count,
+                SUM(CASE WHEN status = 'aborted' THEN 1 ELSE 0 END) AS aborted_count,
+                SUM(CASE WHEN status = 'stalled' THEN 1 ELSE 0 END) AS stalled_count,
+                SUM(dollar_cost)                                AS dollar_cost_total,
+                SUM(tokens_in)                                  AS tokens_in_total,
+                SUM(tokens_out)                                 AS tokens_out_total,
+                SUM(
+                    CASE WHEN status = 'success'
+                    THEN COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)
+                    ELSE 0 END
+                )                                               AS successful_tokens_total
+            FROM runs
+            WHERE task_id = ?
+              AND (? IS NULL OR start_ts >= ?)
+            """,
+            (task_id, since_iso, since_iso),
+        ).fetchone()
+
+        # Fetch latency values for Python-side percentile computation.
+        latency_rows = self._conn.execute(  # noqa: S608 — no user values interpolated
+            """
+            SELECT (julianday(end_ts) - julianday(start_ts)) * 86400000.0 AS latency_ms
+            FROM runs
+            WHERE task_id = ?
+              AND (? IS NULL OR start_ts >= ?)
+              AND end_ts IS NOT NULL
+            """,
+            (task_id, since_iso, since_iso),
+        ).fetchall()
+
+        latency_values = [r["latency_ms"] for r in latency_rows if r["latency_ms"] is not None]
+
+        successful_tokens: int | None = None
+        if row["successful_tokens_total"] is not None and row["success_count"] > 0:
+            successful_tokens = int(row["successful_tokens_total"])
+
+        return TaskRunAggregate(
+            task_id=task_id,
+            run_count=row["run_count"] or 0,
+            success_count=row["success_count"] or 0,
+            failure_count=row["failure_count"] or 0,
+            aborted_count=row["aborted_count"] or 0,
+            stalled_count=row["stalled_count"] or 0,
+            latency_ms_values=latency_values,
+            dollar_cost_total=row["dollar_cost_total"],
+            tokens_in_total=row["tokens_in_total"],
+            tokens_out_total=row["tokens_out_total"],
+            successful_tokens_total=successful_tokens,
+        )
+
+    def aggregate_scores_for_task(
+        self,
+        task_id: str,
+        *,
+        since: datetime | None = None,
+    ) -> list[ScoreAggregateRow]:
+        """Return score aggregates grouped by (metric_name, scorer) for a task.
+
+        Args:
+            task_id: Task identifier to aggregate over.
+            since: Only include scores on runs started at or after this datetime.
+
+        Returns:
+            A list of ``ScoreAggregateRow`` instances, one per (metric_name, scorer) pair.
+        """
+        since_iso = _dt_to_iso(since)
+        rows = self._conn.execute(  # noqa: S608 — no user values interpolated; all bind via ?
+            """
+            SELECT sc.metric_name, sc.scorer, sc.value_numeric, sc.value_label
+            FROM scores sc
+            JOIN runs r ON r.run_id = sc.run_id
+            WHERE r.task_id = ?
+              AND (? IS NULL OR r.start_ts >= ?)
+            ORDER BY sc.metric_name, sc.scorer
+            """,
+            (task_id, since_iso, since_iso),
+        ).fetchall()
+
+        # Group by (metric_name, scorer).
+        groups: dict[tuple[str, str], tuple[list[float], list[str]]] = {}
+        for r in rows:
+            key = (r["metric_name"], r["scorer"])
+            if key not in groups:
+                groups[key] = ([], [])
+            nums, labels = groups[key]
+            if r["value_numeric"] is not None:
+                nums.append(float(r["value_numeric"]))
+            if r["value_label"] is not None:
+                labels.append(str(r["value_label"]))
+
+        return [
+            ScoreAggregateRow(
+                metric_name=metric_name,
+                scorer=scorer,
+                value_numeric_list=nums,
+                value_label_list=labels,
+            )
+            for (metric_name, scorer), (nums, labels) in groups.items()
+        ]
 
     # -------------------------------------------------------------------------
     # Lifecycle
