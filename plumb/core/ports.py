@@ -6,7 +6,16 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
-from plumb.core.entities import Example, JudgeResult, Run, RunKind, RunStatus, Score, Span
+from plumb.core.entities import (
+    Example,
+    JudgeResult,
+    Run,
+    RunKind,
+    RunStatus,
+    RunSummaryRow,
+    Score,
+    Span,
+)
 
 
 @runtime_checkable
@@ -81,6 +90,22 @@ class StorageReader(Protocol):
         kind: str | None = None,
         limit: int = 100,
     ) -> list[Run]: ...
+    def list_runs_with_counts(
+        self,
+        *,
+        since: datetime | None = None,
+        task_id: str | None = None,
+        limit: int = 100,
+    ) -> list[RunSummaryRow]: ...
+    def list_runs_with_counts_paged(
+        self,
+        *,
+        since: datetime | None = None,
+        task_id: str | None = None,
+        kind: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[RunSummaryRow], int]: ...
     def get_spans_for_run(self, run_id: str) -> list[Span]: ...
     def get_scores_for_run(self, run_id: str) -> list[Score]: ...
     def list_examples(

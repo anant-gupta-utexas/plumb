@@ -19,6 +19,7 @@ from plumb.core.entities import (
     Run,
     RunKind,
     RunStatus,
+    RunSummaryRow,
     Score,
     ScorerKind,
     Span,
@@ -28,37 +29,28 @@ from plumb.core.entities import (
 from plumb.core.errors import StorageError, ValidationError
 from plumb.core.ports import Clock
 
-# ---------------------------------------------------------------------------
-# RunSummary — lightweight projection for plumb run stats (CLI)
-# ---------------------------------------------------------------------------
-
-
-class RunSummary:
-    """A run row augmented with span and score counts (for plumb run stats)."""
-
-    __slots__ = (
-        "run_id",
-        "task_id",
-        "kind",
-        "status",
-        "start_ts",
-        "end_ts",
-        "span_count",
-        "score_count",
-    )
-
-    def __init__(self, row: sqlite3.Row) -> None:
-        self.run_id: str = row["run_id"]
-        self.task_id: str = row["task_id"]
-        self.kind: str = row["kind"]
-        self.status: str = row["status"]
-        self.start_ts: str = row["start_ts"]
-        self.end_ts: str | None = row["end_ts"]
-        self.span_count: int = row["span_count"]
-        self.score_count: int = row["score_count"]
-
-
 logger = logging.getLogger(__name__)
+
+
+def _row_to_run_summary(row: sqlite3.Row) -> RunSummaryRow:
+    return RunSummaryRow(
+        run_id=row["run_id"],
+        task_id=row["task_id"],
+        kind=row["kind"],
+        status=row["status"],
+        start_ts=row["start_ts"],
+        end_ts=row["end_ts"],
+        orchestrator_model=row["orchestrator_model"],
+        sub_agent_model=row["sub_agent_model"],
+        git_sha=row["git_sha"],
+        tokens_in=row["tokens_in"],
+        tokens_out=row["tokens_out"],
+        dollar_cost=row["dollar_cost"],
+        error_type=row["error_type"],
+        parent_run_id=row["parent_run_id"],
+        span_count=row["span_count"],
+        score_count=row["score_count"],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -576,7 +568,7 @@ class SQLiteStorageAdapter:
         since: datetime | None = None,
         task_id: str | None = None,
         limit: int = 100,
-    ) -> list[RunSummary]:
+    ) -> list[RunSummaryRow]:
         """Return runs with span and score counts (used by ``plumb run stats``).
 
         All filtering is done via parameterized bindings; no dynamic SQL predicates
@@ -587,6 +579,8 @@ class SQLiteStorageAdapter:
             """
             SELECT
                 r.run_id, r.task_id, r.kind, r.status, r.start_ts, r.end_ts,
+                r.orchestrator_model, r.sub_agent_model, r.git_sha,
+                r.tokens_in, r.tokens_out, r.dollar_cost, r.error_type, r.parent_run_id,
                 COUNT(DISTINCT s.span_id)   AS span_count,
                 COUNT(DISTINCT sc.score_id) AS score_count
             FROM runs r
@@ -601,7 +595,77 @@ class SQLiteStorageAdapter:
             """,
             (since_iso, since_iso, task_id, task_id, limit),
         ).fetchall()
-        return [RunSummary(r) for r in rows]
+        return [_row_to_run_summary(r) for r in rows]
+
+    def list_runs_with_counts_paged(
+        self,
+        *,
+        since: datetime | None = None,
+        task_id: str | None = None,
+        kind: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[RunSummaryRow], int]:
+        """Return a page of runs with counts and the total matching count.
+
+        Both the page query and the COUNT query use the same WHERE clause so
+        they observe a consistent snapshot under WAL.
+
+        Args:
+            since: Only include runs started at or after this datetime.
+            task_id: Filter to a specific task identifier.
+            kind: Filter by run kind (``"offline"`` or ``"online"``).
+            limit: Maximum number of rows to return.
+            offset: Number of rows to skip before returning results.
+
+        Returns:
+            A tuple of ``(rows, total)`` where ``total`` is the count of all
+            matching runs regardless of ``limit``/``offset``.
+        """
+        if kind is not None:
+            try:
+                RunKind(kind)
+            except ValueError as exc:
+                raise ValidationError(f"Invalid kind: {kind!r}") from exc
+
+        since_iso = _dt_to_iso(since)
+
+        rows = self._conn.execute(  # noqa: S608 — no user values interpolated; all bind via ?
+            """
+            SELECT
+                r.run_id, r.task_id, r.kind, r.status, r.start_ts, r.end_ts,
+                r.orchestrator_model, r.sub_agent_model, r.git_sha,
+                r.tokens_in, r.tokens_out, r.dollar_cost, r.error_type, r.parent_run_id,
+                COUNT(DISTINCT s.span_id)   AS span_count,
+                COUNT(DISTINCT sc.score_id) AS score_count
+            FROM runs r
+            LEFT JOIN spans  s  ON s.run_id  = r.run_id
+            LEFT JOIN scores sc ON sc.run_id = r.run_id
+            WHERE
+                (? IS NULL OR r.start_ts >= ?)
+                AND (? IS NULL OR r.task_id = ?)
+                AND (? IS NULL OR r.kind = ?)
+            GROUP BY r.run_id
+            ORDER BY r.start_ts DESC
+            LIMIT ? OFFSET ?
+            """,
+            (since_iso, since_iso, task_id, task_id, kind, kind, limit, offset),
+        ).fetchall()
+
+        count_row = self._conn.execute(  # noqa: S608 — no user values interpolated; all bind via ?
+            """
+            SELECT COUNT(*) AS total
+            FROM runs r
+            WHERE
+                (? IS NULL OR r.start_ts >= ?)
+                AND (? IS NULL OR r.task_id = ?)
+                AND (? IS NULL OR r.kind = ?)
+            """,
+            (since_iso, since_iso, task_id, task_id, kind, kind),
+        ).fetchone()
+
+        total: int = count_row["total"] if count_row else 0
+        return [_row_to_run_summary(r) for r in rows], total
 
     # -------------------------------------------------------------------------
     # Lifecycle
