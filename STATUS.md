@@ -1,9 +1,9 @@
 ---
 project: plumb
-status: v1.0.1 shipped; v1.1/v1.2/v2.0 roadmap defined (2026-06-01)
-phase: roadmap-planning (PRD §10 release plan + deferred backlog prioritized)
-last_updated: 2026-06-01
-next_gate: v1.1 TRD & phase breakdown (atlas unblock + schema v2 migration)
+status: v1.0.1 shipped; v1.1/v1.2/v2.0 TRD detailed (2026-06-02)
+phase: roadmap-specification (TRD §§14–19 normative for v1.1/v1.2; scope-level for v2.0)
+last_updated: 2026-06-02
+next_gate: v1.1 phase breakdown TRS (task list for schema v2 migration + three API additions)
 blocked_on: null
 ---
 
@@ -35,12 +35,17 @@ deferred-options backlog ([docs/2_architecture/deferred-features.md](docs/2_arch
   traceability to deferred-features backlog.
 - Deferred-features backlog annotated (2026-06-01): 10 scheduled entries
   marked `→ scheduled PRD §10 vX.Y` per backlog's supersede-don't-delete convention.
+- **TRD extended to v1.1/v1.2/v2.0 (2026-06-02):** §§14–19 added; v1.0 baseline (§§1–13)
+  preserved with inline renegotiation notes. v1.1 & v1.2 have full normative FR/NFR/Data/AC;
+  v2.0 is scope-level per design (feature AC deferred to TDS). Migration contract detailed
+  (DATA-MIG-2…6): additive-only, duplicate-abort safety, atomic, idempotency guard.
 
 ## Next
 
-- **v1.1 planning.** Tech Lead / TRD task: detail Phase 1 (schema v2 migration
-  + three new surface items). Unblocks atlas dogfooding.
-- PyPI publication (v1.0.1, when release readiness confirmed).
+- **v1.1 phase breakdown.** Run `/dev-docs-be` TRS command to produce flat task list
+  under `dev/active/v1.1-schema-migration/` (or similar). Maps §15 FR/NFR/AC to
+  tasks. Unblocks atlas dogfooding.
+- **PyPI publication (v1.0.1).** Smoke test, then `uv publish`.
 
 ## Blocked / waiting
 
@@ -50,8 +55,9 @@ deferred-options backlog ([docs/2_architecture/deferred-features.md](docs/2_arch
 
 - **Roadmap authority:** `docs/1_product_and_research/PRD.md` §10 Release Plan
 - **Backlog authority:** `docs/2_architecture/deferred-features.md` (per-option
-  rationale; 10 items now scheduled, rest deferred or won't-do)
-- TRD (v1.0 authority): `docs/2_architecture/TRD.md`
+  rationale; 10 items scheduled, rest deferred or won't-do)
+- **TRD (comprehensive):** `docs/2_architecture/TRD.md` (v1.0 baseline §§1–13 +
+  v1.1/v1.2/v2.0 roadmap §§14–19; 2026-06-02)
 - SDD (v1.0 authority): `docs/2_architecture/SYSTEM_DESIGN.md`
 - Orchestrator handoff guide: `docs/3_guides/orchestrator_handoff.md`
 - Optional extras: `pyproject.toml`

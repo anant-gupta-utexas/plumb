@@ -1,11 +1,19 @@
 # plumb — Technical Requirements Document (TRD)
 
-**Status:** Draft v1 — derived from [PRD](../1_product_and_research/PRD.md) (Phase 0 → Phase 1 hand-off)
+**Status:** v1.0 shipped; v1.1 / v1.2 / v2.0 specified — derived from [PRD](../1_product_and_research/PRD.md) §10 Release Plan
 **Owner:** anant
-**Last updated:** 2026-04-23
-**Scope:** plumb v1 (Phase 1 ship, Week 6 target per PRD §8)
+**Last updated:** 2026-06-01
+**Scope:** plumb v1.0 (shipped) → v1.1 (next release) → v1.2 → v2.0, mapped to PRD §10
 
-> **Reading order.** This TRD is the text-heavy specification of *what to build, what rules it follows, how well it must perform.* The **"why"** lives in `[../1_product_and_research/PRD.md](../1_product_and_research/PRD.md)`. The **canonical schema + metric derivation** lives in `[../1_product_and_research/schema-and-metrics-v1.md](../1_product_and_research/schema-and-metrics-v1.md)` — reproduced in §7 with concrete SQL types and constraints. Options considered but not shipped in v1 are tracked in `[./deferred-features.md](./deferred-features.md)`.
+> **Reading order.** This TRD is the text-heavy specification of *what to build, what rules it follows, how well it must perform.* The **"why"** lives in `[../1_product_and_research/PRD.md](../1_product_and_research/PRD.md)`. The **canonical schema + metric derivation** lives in `[../1_product_and_research/schema-and-metrics-v1.md](../1_product_and_research/schema-and-metrics-v1.md)` — reproduced in §7 with concrete SQL types and constraints. Options considered but not shipped, plus the per-decision rationale for everything scheduled here, are tracked in `[./deferred-features.md](./deferred-features.md)`.
+
+> **Release coverage.** §§1–13 were written for v1.0 and remain the **baseline** specification (every v1.0 FR/NFR/AC still holds, except where a v1.1+ section *explicitly renegotiates* it — each such case is flagged inline). The post-v1.0 roadmap is specified in the **new §§14–18** (§14 is a one-page overview; §19 is the follow-up appendix):
+> - **§15** — v1.1 (Atlas unblock + schema v2): one additive `user_version` 1→2 migration, third entry point `resume_run`, fifth handle method `add_example`. Full normative FR/NFR/Data/AC.
+> - **§16** — v1.2 (Metric depth): plan-vs-execution, MAST tagging, judge calibration, concurrency, per-metric model overrides. Full normative FR/NFR/AC. **No schema migration.**
+> - **§17** — v2.0 (Analysis, scale & alternative judges): scope-level specification only (goals, engineering scope, exit criteria), because these features are experiment-/content-driven and not yet frozen — per-feature AC is deferred to each feature's TDS.
+> - **§18** — Development Phases: maps engineering phases to PRD §10 releases (Phase 1→v1.0, Phase 2→v1.1, Phase 3→v1.2, Phase 4→v2.0).
+>
+> Where a v1.0 FR is renegotiated (FR-API-1 surface cap, FR-API-4 four-method cap, DATA-MIG-1 zero-migration), the original text is **preserved** and a forward-pointer to the renegotiating section is added — the v1.0 record is never silently overwritten.
 
 ---
 
@@ -45,6 +53,7 @@ The business outcome is a publishable artifact: a single framework that serves D
 
 Every technical decision in this TRD ladders up to one of the PRD Tier-1 (gating) success metrics:
 
+> This table records the **v1.0** gating contract (Week 6). Two of its rows — "Schema stability" and "Entry-point surface" — were deliberately renegotiated for the v1.1 roadmap per PRD §8 (2026-06-01 gate update): the entry-point surface widens (§15.1/§15.2) and exactly one additive migration is permitted (§15.3). These are tracked decisions, not regressions; see the inline notes at FR-API-1, FR-API-4, and DATA-MIG-1.
 
 | PRD Tier-1 metric (Week 6 target)                         | TRD section that guarantees it                                                                                             |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -71,6 +80,8 @@ FR IDs are normative (`MUST`, `SHOULD`, `MAY` per RFC 2119). Each FR ties to a P
 ### 3.1 Public API surface
 
 **FR-API-1 (MUST).** The public API surface is exactly two callables — `plumb.run` as a decorator and `plumb.run` as a context manager (unified via a single `Run` callable object that supports both forms, mirroring the PRD §6 examples). **No third public entry point is permitted in v1** (PRD §7 non-goal + PRD §8 Tier-1 gating metric).
+
+> **Renegotiated in v1.1 (§15.1, FR-RESUME-1).** PRD §7 (2026-06-01) widens this gate to add a *third* entry point, `plumb.resume_run(run_id)`, for atlas's cross-process `code_gen` continuation. The v1.0 two-callable cap stands as the v1.0 record; v1.1 adds exactly one named callable with a documented contract — no plugin system, no class hierarchy. See §15.1.
 
 **FR-API-2 (MUST).** The decorator form wraps sync and async functions equivalently:
 
@@ -102,6 +113,8 @@ with run(task_id="atlas.stage5.codegen", kind="online") as r:
 - `r.abort(reason: str)` — marks the run `status='aborted'` and closes it.
 
 No public properties are mutable after run close. No plugin system, no middleware, no subclassing hook (PRD §7).
+
+> **Renegotiated in v1.1 (§15.2, FR-ADDEX-1).** PRD §7 (2026-06-01) adds a *fifth* handle method, `r.add_example(...)`, so callers can record rejection examples programmatically from inside an active run instead of reaching into the adapter layer. The v1.0 four-method cap stands as the v1.0 record. See §15.2.
 
 ### 3.2 Auto-capture behaviour
 
@@ -543,6 +556,8 @@ $PLUMB_DATA_DIR/                   # default: ~/.plumb/
 
 **DATA-MIG-1.** Migration policy: **zero schema migrations after Week 4** (PRD §8 Tier-1 gating). Any schema change = v2 (major version bump). v1 ↔ v2 migration will be a separate tool (`plumb migrate v1-to-v2`); not in v1 scope.
 
+> **Refined in v1.1 (§15.3, DATA-MIG-2).** The "zero migrations" discipline is preserved *per release*, not forever. v1.1 performs exactly **one** documented, additive migration (`user_version` 1→2) and re-freezes the schema for the rest of the release. The migration is additive-only — new columns and indexes on the four existing tables, **no fifth table, no destructive rewrites**. Whether a future bump is "minor + migration" vs. "major" is decided per release in the PRD §10 Release Plan, which is the authority. See §15.3 for the v1.1 migration contract.
+
 ---
 
 ## 8. Infrastructure & Environment Requirements
@@ -791,15 +806,370 @@ All acceptance criteria are stated in Given/When/Then form and tied back to a PR
 
 ---
 
-## 14. Appendix — Follow-ups requested
+## 14. Roadmap overview (v1.1 → v2.0)
 
-These are TRD-acceptance-blocking or TRD-deferred items. Resolution is tracked outside this document:
+§§1–13 specify v1.0 (shipped). The sections below specify the post-v1.0 roadmap, mapped 1:1 to the PRD §10 Release Plan. Each release's full per-decision rationale lives in `[./deferred-features.md](./deferred-features.md)`; this TRD adds the normative engineering contract.
 
-1. **User sign-off on the ports-and-adapters deviation** from CLAUDE.md's literal three-folder mandate (§5.3 Assumption 1). Blocks TRD acceptance.
-2. **Proposed follow-up edit to CLAUDE.md** once (1) is approved, to document plumb's actual convention. Not done unilaterally.
-3. **Rewrite of `[docker-compose.yml](../../docker-compose.yml)` and `[../3_guides/core_concepts.md](../3_guides/core_concepts.md)`** to remove the web-app framing (§8.5).
-4. **First TDS (Technical Design Specification)** under `dev/active/v1-core/` translating this TRD into an implementation plan and task list per the repo workflow in `[CLAUDE.md](../../CLAUDE.md)`.
+| Section | PRD §10 release | Theme | Schema impact | Surface impact | Spec depth |
+| --- | --- | --- | --- | --- | --- |
+| §15 | **v1.1** | Atlas unblock + schema v2 | **one** additive migration `user_version` 1→2 | +1 entry point (`resume_run`), +1 handle method (`add_example`) | Full normative FR/NFR/Data/AC |
+| §16 | **v1.2** | Metric depth (flagship post) | **none** — new scores fit existing `scores` table | none | Full normative FR/NFR/AC |
+| §17 | **v2.0** | Analysis, scale & alt judges | none expected (revisit per feature) | none expected | Scope-level only (per-feature AC → TDS) |
+| §18 | — | Development Phases | — | — | Phase→release mapping |
+
+**Sequencing principle (inherited from PRD §10): dependency before label.** The backlog labels some metric work "v1.1"; that work sits *behind* v1.1's schema/judge-throughput work in dependency order, so it is scheduled as **v1.2** here. The PRD §10 Release Plan is the authority; backlog labels are traceability pointers, not commitments.
 
 ---
 
-*End of TRD v1.*
+## 15. v1.1 — Atlas unblock + schema v2
+
+**Goal.** Close the silent-data-loss gaps surfaced by atlas dogfooding and unblock the atlas integration. One additive schema migration (`user_version` 1→2) carries the whole data cluster; the surface gate is renegotiated for two API items. Maps to PRD §10 "v1.1 — Atlas unblock + schema v2".
+
+**Five features** (each maps to a `deferred-features.md` entry):
+
+| # | Feature | Backlog entry | Type |
+| --- | --- | --- | --- |
+| 1 | `plumb.resume_run(run_id)` | "v2 — `plumb.resume_run(run_id)`" (2026-05-06) | API — third entry point |
+| 2 | `RunHandle.add_example(...)` | "v2 — `RunHandle.add_example(...)`" (2026-05-06) | API — fifth handle method |
+| 3 | `scores.rationale` durable column | "v2 — `scores.rationale` durable column" (2026-05-06) | Schema (additive) |
+| 4 | Idempotent score ingestion | "v2 — Idempotent score ingestion" (2026-05-06) | Schema (additive index) + API |
+| 5 | `spans.tokens_in` / `tokens_out` split | "v2 — Span token column split" (2026-04-29) | Schema (additive) |
+
+### 15.1 `plumb.resume_run(run_id)` — third entry point
+
+**FR-RESUME-1 (MUST).** A new public callable `plumb.resume_run(run_id: str)` is added as the **third** instrumentation entry point. It is a context manager only (not a decorator) that re-opens an *existing* `runs` row and yields a `RunHandle` bound to it. This renegotiates FR-API-1 (§3.1); see PRD §7 and §8 gate update.
+
+```python
+import plumb
+
+# Process A (atlas orchestrator) opens the run:
+with plumb.run(task_id="atlas.codegen", kind="online") as r:
+    run_id = r.run_id
+    # ... emits PLUMB_PARENT_RUN_ID / run_id to process B ...
+
+# Process B (atlas code_gen stage) continues the SAME run:
+with plumb.resume_run(run_id=run_id) as r:
+    r.add_span(kind="llm", name="codegen.call", ...)
+    r.add_score("verify_pass", scorer="deterministic", value_label="pass")
+```
+
+**FR-RESUME-2 (MUST).** `resume_run` MUST append spans/scores to the existing `runs` row and MUST NOT:
+- write a new `start_ts` (the row's original `start_ts` is preserved),
+- create a child run (this is same-run continuation, distinct from FR-GRAPH-1 child runs),
+- reset `status` away from a terminal state. If the target run is already `status IN ('success','failure','aborted')`, `resume_run` MUST raise `ValidationError` before yielding — re-opening a closed run is a caller error, not a silent no-op.
+
+**FR-RESUME-3 (MUST).** On `resume_run` block exit, the run is **re-finalized**: `end_ts` is updated to the new exit time, terminal `status` is set from block outcome (success / exception → `failure`), and newly buffered spans flush in one transaction (NFR-Perf-4 still applies). The bidirectional invariant from FR-EDGE-1 (re-raise unchanged) holds.
+
+**FR-RESUME-4 (MUST).** If `run_id` does not exist, `resume_run` MUST raise `NotFoundError` before yielding. This is distinct from the FR-RESUME-2 already-terminal case.
+
+**FR-RESUME-5 (SHOULD).** Cross-process safety: because two processes MAY hold the same `run_id`, the adapter relies on SQLite WAL + `busy_timeout=5000` (NFR-Perf-3) for write serialization. plumb does NOT add application-level locking in v1.1; concurrent `resume_run` on the *same* row from two live processes is an unsupported caller pattern (documented, not enforced). The supported pattern is *sequential* hand-off (process A closes or hands off, then process B resumes).
+
+**Storage contract.** The adapter grows an `open_or_resume(run_id)` path: `SELECT` the row, assert non-terminal, return a handle whose `finalize_run` performs an `UPDATE ... WHERE run_id=?` (not an `INSERT`). No new `start_ts`.
+
+### 15.2 `RunHandle.add_example(...)` — fifth handle method
+
+**FR-ADDEX-1 (MUST).** `RunHandle` gains a fifth user-facing method, renegotiating FR-API-4 (§3.1):
+
+```python
+r.add_example(
+    inputs_hash: str,
+    *,
+    source: Literal["synthetic", "production_promotion", "human_authored"],
+    expected_output_hash: str | None = None,
+    rubric: str | None = None,
+) -> str   # returns example_id
+```
+
+**FR-ADDEX-2 (MUST).** `add_example` writes one `examples` row with `task_id` taken from the active run, `origin_run_id` set to the active run's `run_id`, `active=1`, and `created_at` from the injected `Clock`. It returns the generated `example_id`.
+
+**FR-ADDEX-3 (MUST).** `inputs_hash` and (when provided) `expected_output_hash` MUST be 64-char sha256 hex (same validation as `Example` entity, §7.1). Invalid hashes raise `ValidationError` without writing a row.
+
+**FR-ADDEX-4 (MUST).** `add_example` is the programmatic equivalent of `plumb example promote` (§3.5) but callable from inside an open run. It does NOT replace the CLI path; both write structurally identical `examples` rows.
+
+### 15.3 Schema v2 migration contract
+
+**DATA-MIG-2 (MUST).** v1.1 performs **exactly one** schema migration, `user_version` 1→2, applied automatically on first open of a v1 database by a v1.1 build. The migration is **additive only**:
+
+- `ALTER TABLE scores ADD COLUMN rationale TEXT;` (§15.4)
+- `ALTER TABLE spans ADD COLUMN tokens_in INTEGER;` and `ALTER TABLE spans ADD COLUMN tokens_out INTEGER;` (§15.5)
+- `CREATE UNIQUE INDEX idx_scores_idem ON scores(run_id, metric_name, scorer_version, IFNULL(span_id, ''));` (§15.6)
+
+**DATA-MIG-3 (MUST).** The migration MUST be **idempotent and non-destructive**: it MUST NOT drop, rename, or rewrite any existing column or row, MUST NOT create a fifth table, and re-running a v1.1 build against an already-migrated (`user_version=2`) database MUST be a no-op. `SCHEMA_VERSION` bumps to `2`; after the migration runs, the schema re-freezes for the remainder of the v1.1 release line (DATA-MIG-1 discipline, preserved per-release).
+
+**DATA-MIG-4 (MUST).** Migration is wrapped in a single transaction. On any failure mid-migration, the transaction rolls back and `user_version` stays at `1`; plumb raises `StorageError` naming the failed step. A partially-migrated database is never committed.
+
+**DATA-MIG-5 (MUST).** The `_bootstrap_schema` version gate (currently: `0 → set`, `== SCHEMA_VERSION → ok`, else → error) is extended with a `1 → run migration → 2` arm. A database at `user_version > SCHEMA_VERSION` (a newer plumb wrote it) still raises `StorageError` — downgrade is unsupported.
+
+**DATA-MIG-6 (MUST — duplicate-row safety, per 2026-06-01 decision).** The idempotency UNIQUE index (§15.6) can fail to build if a v1.0 database already contains duplicate score rows under the new key. The migration MUST **pre-check** for such duplicates and, if any exist, **abort loudly** (`StorageError` naming the conflicting `(run_id, metric_name, scorer_version, span_id)` tuples and the row count) **without deleting any rows**. plumb MUST NOT auto-dedup user data (NFR-Rel-4 "never destroys data"). The error message MUST point the user at a documented manual-dedup recipe. Rationale: silently deleting score history to satisfy an index is a worse failure than a blocked upgrade the user can resolve deliberately.
+
+### 15.4 `scores.rationale` durable column
+
+**FR-RATIONALE-1 (MUST).** The `scores` table gains a `rationale TEXT` (nullable) column. The `Score` entity already carries `rationale: str | None` (v1.0) and `RunHandle.add_score(..., rationale=...)` already accepts it (v1.0) — v1.1 closes the silent drop at the storage boundary.
+
+**FR-RATIONALE-2 (MUST).** `_score_to_row` MUST persist `rationale`; `_row_to_score` MUST read it back. A round-trip of a score with `rationale="..."` MUST return the same string. Judge adapters (§6.1) already produce rationale text; their `write_score` path now persists it.
+
+**FR-RATIONALE-3 (MUST).** Pre-migration rows (written by v1.0) have `rationale = NULL` after the `ALTER`; this is correct (the data was never captured) and MUST NOT be backfilled or fabricated.
+
+### 15.5 `spans.tokens_in` / `tokens_out` column split
+
+**FR-TOKENS-1 (MUST).** The `spans` table gains `tokens_in INTEGER` and `tokens_out INTEGER` (both nullable). The v1.0 single `tokens` column is **retained** (additive-only rule, DATA-MIG-3) and continues to hold the sum for backward-compatible reads.
+
+**FR-TOKENS-2 (MUST).** On write (post-migration), `_span_to_row` MUST populate all three: `tokens_in`, `tokens_out`, and `tokens = (tokens_in or 0) + (tokens_out or 0)`. On read, `_row_to_span` MUST surface `tokens_in` and `tokens_out` from the new columns directly — eliminating the v1.0 round-trip asymmetry (v1.0 surfaced the sum as `tokens_in` and always returned `tokens_out=None`; see entity docstring `plumb/core/entities.py:120`).
+
+**FR-TOKENS-3 (MUST).** Pre-migration span rows have `tokens_in = NULL`, `tokens_out = NULL`, and the original summed `tokens`. Readers MUST treat a NULL `tokens_in` with a non-NULL `tokens` as "split unknown, sum = `tokens`" — i.e., fall back to the v1.0 behaviour for legacy rows (surface `tokens` as `tokens_in`). This MUST be covered by an explicit test (AC-TOKENS-2).
+
+**FR-TOKENS-4 (SHOULD).** Aggregate queries that currently sum `tokens` (e.g. `plumb run stats`, the HTTP `/stats` slice) SHOULD prefer `COALESCE(tokens_in,0)+COALESCE(tokens_out,0)` only when `tokens_in IS NOT NULL`, else fall back to `tokens`, so mixed legacy/new databases report consistent totals.
+
+### 15.6 Idempotent score ingestion
+
+**FR-IDEM-1 (MUST).** A UNIQUE index `idx_scores_idem` on `(run_id, metric_name, scorer_version, IFNULL(span_id, ''))` is added (§15.3). The `IFNULL(span_id,'')` term makes the constraint NULL-safe (two run-level scores with the same metric+version collide; SQLite would otherwise treat `NULL != NULL`).
+
+**FR-IDEM-2 (MUST).** `RunHandle.add_score` and `plumb score write` gain an optional `idempotency_key: str | None` parameter. When the underlying write would violate `idx_scores_idem`, the storage layer MUST use `INSERT ... ON CONFLICT DO NOTHING` semantics (the first write wins; subsequent identical writes are silent no-ops). The method MUST return a flag or the existing `score_id` so the caller can tell insert from no-op.
+
+**FR-IDEM-3 (MUST).** Error scores are exempt from collision suppression where it would hide a re-run: a row with `scorer_version` ending in `:error` (judge fail-open, INT-JUDGE-5) MUST NOT block a later successful re-score of the same `(run_id, metric_name)`. The index key includes `scorer_version`, so `provider:model:sha` and `provider:model:sha:error` are distinct keys — this falls out of the schema, but MUST be asserted by test (AC-IDEM-2).
+
+**FR-IDEM-4 (MUST).** `idempotency_key` is **not** stored as a column (no fifth-table-style sprawl); it is a *client-supplied assertion* that the call is safe to retry. The actual dedup is enforced by the UNIQUE index on the semantic key. If a caller passes an `idempotency_key` but the semantic key differs from a prior write, a new row IS written (the key is advisory, the index is authoritative). This is documented behaviour, not a contradiction.
+
+### 15.7 v1.1 NFRs (deltas from §4)
+
+**NFR-MIG-1 (MUST).** The `user_version` 1→2 migration MUST complete in ≤ **500 ms** for a database with ≤ 100k score rows on reference hardware (the duplicate pre-check in DATA-MIG-6 is the dominant cost — it is a single indexed `GROUP BY ... HAVING COUNT(*)>1` scan).
+
+**NFR-MIG-2 (MUST).** Migration runs **once**, inside the existing connection bootstrap (`_bootstrap_schema`), before any user query. It adds zero hot-path cost after the one-time run (NFR-Perf-1/2 unaffected).
+
+**NFR-RESUME-1 (MUST).** `resume_run` open (re-`SELECT` + handle construction) MUST add ≤ **5 ms** p95 over the existing `run(...)` open path; re-finalize cost is bounded by the same NFR-Perf-2 (≤ 50 ms for ≤ 100 spans) budget as a normal close.
+
+**NFR-RESUME-2 (MUST).** All v1.0 NFR-Sec / NFR-Rel guarantees hold unchanged for `resume_run` and `add_example`: parameterized SQL (NFR-Sec-3), no secrets in logs (NFR-Sec-2), fail-degraded-not-raise on plumb's own internal error (NFR-Rel-1).
+
+### 15.8 v1.1 acceptance criteria
+
+**AC-RESUME-1** (→ FR-RESUME-1/2/3).
+*Given* a run R opened and closed-by-handoff in process A with 3 spans, *When* process B calls `with plumb.resume_run(R.run_id) as r:` and adds 2 spans, *Then* exactly one `runs` row exists for R with 5 spans total, R's original `start_ts` is unchanged, and `end_ts` reflects the process-B exit time.
+
+**AC-RESUME-2** (→ FR-RESUME-2).
+*Given* a run R already at `status='success'`, *When* `plumb.resume_run(R.run_id)` is called, *Then* it raises `ValidationError` before yielding a handle and writes no new rows.
+
+**AC-RESUME-3** (→ FR-RESUME-4).
+*Given* a `run_id` that does not exist, *When* `plumb.resume_run(...)` is called, *Then* it raises `NotFoundError`.
+
+**AC-ADDEX-1** (→ FR-ADDEX-1/2).
+*Given* an open run R, *When* `r.add_example(inputs_hash=<64hex>, source="production_promotion")` is called, *Then* one `examples` row exists with `origin_run_id=R.run_id`, `task_id=R.task_id`, `active=1`, and the returned `example_id` matches that row.
+
+**AC-ADDEX-2** (→ FR-ADDEX-3).
+*Given* an open run, *When* `r.add_example(inputs_hash="not-hex")` is called, *Then* it raises `ValidationError` and no `examples` row is written.
+
+**AC-MIG-1** (→ DATA-MIG-2/3/5 + PRD §8 gate update "one documented additive migration").
+*Given* a `plumb.db` at `user_version=1` written by v1.0, *When* a v1.1 build opens it, *Then* `user_version` becomes `2`, the `scores.rationale`, `spans.tokens_in`, `spans.tokens_out` columns and `idx_scores_idem` index exist, and every pre-existing row is readable unchanged.
+
+**AC-MIG-2** (→ DATA-MIG-3 idempotency).
+*Given* an already-migrated `user_version=2` database, *When* a v1.1 build re-opens it, *Then* no `ALTER`/`CREATE INDEX` runs again and the open succeeds with no error.
+
+**AC-MIG-3** (→ DATA-MIG-6 duplicate safety).
+*Given* a `user_version=1` database seeded with two score rows sharing `(run_id, metric_name, scorer_version, span_id)`, *When* a v1.1 build opens it, *Then* the migration aborts with `StorageError` naming the conflicting tuple and row count, `user_version` stays `1`, and **both** duplicate rows are still present (zero deletions).
+
+**AC-MIG-4** (→ DATA-MIG-4 atomicity).
+*Given* a migration step is forced to fail (injected error on the index creation), *When* a v1.1 build opens the database, *Then* the whole migration rolls back, `user_version` stays `1`, and the `scores.rationale` column added earlier in the same migration is NOT present.
+
+**AC-RATIONALE-1** (→ FR-RATIONALE-2).
+*Given* a v1.1 database, *When* `r.add_score("m", scorer="judge", value_label="pass", rationale="because X")` is written and the row re-read, *Then* `Score.rationale == "because X"`.
+
+**AC-TOKENS-1** (→ FR-TOKENS-2).
+*Given* a v1.1 database, *When* a span is written with `tokens=(10, 25)` and re-read, *Then* `Span.tokens_in==10` and `Span.tokens_out==25` (no round-trip asymmetry).
+
+**AC-TOKENS-2** (→ FR-TOKENS-3 legacy fallback).
+*Given* a span row written by v1.0 (only summed `tokens=35`, `tokens_in/out` NULL after migration), *When* it is re-read by v1.1, *Then* `Span.tokens_in==35` and `Span.tokens_out is None` (v1.0 fallback semantics preserved).
+
+**AC-IDEM-1** (→ FR-IDEM-1/2).
+*Given* an open run, *When* `r.add_score(...)` is called twice with the identical `(metric_name, scorer, scorer_version, span_id, value)`, *Then* exactly one `scores` row exists and the second call reports a no-op (no new `score_id`).
+
+**AC-IDEM-2** (→ FR-IDEM-3).
+*Given* a judge fail-open row with `scorer_version="anthropic:claude-sonnet-4-6:abc:error"`, *When* a successful re-score writes `scorer_version="anthropic:claude-sonnet-4-6:abc"` for the same `(run_id, metric_name)`, *Then* both rows coexist (distinct keys; the error does not block the re-score).
+
+---
+
+## 16. v1.2 — Metric depth
+
+**Goal.** Richer failure analysis for the long-form write-up. **No schema migration** — every new score fits the existing `scores` table via `metric_name`; `user_version` stays at `2`. Maps to PRD §10 "v1.2 — Metric depth".
+
+**Renumber note (inherited from PRD §10).** The backlog labels these features "v1.1"; they are scheduled here as **v1.2** because they depend on v1.1's judge-throughput (concurrency) and migration work landing first.
+
+**Five features:**
+
+| # | Feature | Backlog entry | Storage |
+| --- | --- | --- | --- |
+| 1 | Plan-vs-execution attribution | "v1.1 — Plan-vs-execution attribution" | `scores.metric_name ∈ {'plan_failure','execution_failure'}` |
+| 2 | MAST 14-mode failure tagging | "v1.1 — MAST 14-mode failure tagging" | `scores.metric_name='mast_mode'`, `value_label=<mode_id>` |
+| 3 | Judge calibration vs human α | "v1.1 — Judge calibration against human-human α baseline" | new `plumb.stats` helper; scores compared, not stored as new shape |
+| 4 | Concurrent judge calls | "v1.1 — Concurrent judge calls" | none (throughput only) |
+| 5 | Per-metric model env overrides | "v1.1 — Per-metric model env overrides" | none (config only) |
+
+### 16.1 Plan-vs-execution attribution
+
+**FR-PLANEX-1 (MUST).** A new `plumb judge run` mode (or a dedicated `plumb attribute plan-vs-exec`) implements the counterfactual recipe: for each failed run, re-run the **same plan** with a **stronger executor model**; if it now succeeds → `execution_failure`, else → `plan_failure`. Results are written as `scores` rows with `scorer='judge'`, `metric_name ∈ {'plan_failure','execution_failure'}`, `value_label ∈ {'pass','fail'}` (or `value_numeric` confidence).
+
+**FR-PLANEX-2 (MUST).** The stronger-executor model is configurable via the per-metric override mechanism (§16.5) — plan-vs-exec defaults to an Opus-class model; the original run's executor is read from `runs.sub_agent_model`.
+
+**FR-PLANEX-3 (MUST).** Attribution scores carry `scorer_version` in the standard `{provider}:{model}:{prompt_sha}` form (FR-SCORE-2), so a later prompt change is drift-detectable. No schema change: the recipe writes ordinary `scores` rows.
+
+### 16.2 MAST 14-mode failure tagging
+
+**FR-MAST-1 (MUST).** An LLM-judge tags each failed run with one-or-more of Cemri et al.'s 14 MAST failure modes (arXiv:2503.13657). Each tag is one `scores` row: `metric_name='mast_mode'`, `value_label=<mode_id>` (a stable enumerated identifier, e.g. `"1.1"`…`"3.3"`), `scorer='judge'`.
+
+**FR-MAST-2 (MUST).** Multiple modes per run are represented as multiple rows (one per mode), not a delimited string — this keeps `GROUP BY value_label` failure dashboards trivial and respects the "no fifth table / no array column" constraint.
+
+**FR-MAST-3 (SHOULD).** The MAST mode-id vocabulary is pinned in a versioned prompt/reference file under `judge_prompts/` so the 14-mode taxonomy can be re-cut without rewriting history (the `prompt_sha` in `scorer_version` records which vocabulary version produced each tag).
+
+**FR-MAST-4 (MUST — validation gate).** The MAST tagger MUST NOT be quoted publicly until validated against ≥ **30 failed runs** with human-confirmed mode labels (PRD §4 + backlog "needs ≥30 failed runs to validate"). This is a release gate, captured in AC-MAST-1.
+
+### 16.3 Judge calibration vs human α
+
+**FR-CALIB-1 (MUST).** A `plumb.stats` helper computes **Krippendorff's α** between a judge's labels and a human-labeled held-out set for a given metric. The scaffold (`scorer_version` on every row, v1.0) already enables pairing judge rows to human rows by `(run_id, metric_name)`.
+
+**FR-CALIB-2 (MUST).** A CLI surface (`plumb judge calibrate --metric <name> --against human`) reports α plus the human–human baseline α (the ceiling). Output states the held-out set size and warns when N is too small for a stable α.
+
+**FR-CALIB-3 (SHOULD).** Calibration is read-only over existing `scores` rows — it computes a statistic, it does not write a new score shape. (If a calibration *result* is recorded, it is an ordinary `scores` row, e.g. `metric_name='judge_alpha'`, `scorer='deterministic'`.)
+
+### 16.4 Concurrent judge calls
+
+**FR-CONC-1 (MUST).** `plumb judge run` gains `--concurrency N` (default `1`, preserving v1.0 sequential behaviour). Concurrency is backed by a bounded thread pool (`concurrent.futures.ThreadPoolExecutor`), sized by `N`.
+
+**FR-CONC-2 (MUST).** The fail-open retry path (INT-JUDGE-5: 3 retries, exp backoff + jitter) MUST remain correct under concurrency. A semaphore or the pool bound MUST cap in-flight requests so rate-limit retries don't stampede. Per-row failures stay isolated — one row's `value_label='error'` MUST NOT abort sibling rows in the pool.
+
+**FR-CONC-3 (MUST).** Score writes from concurrent judges MUST be serialized at the storage boundary (single writer connection or a write lock) — SQLite WAL allows one writer; the thread pool fans out the *network* calls, not the writes. Combined with v1.1 idempotency (FR-IDEM-1), a retried row cannot create a duplicate.
+
+**FR-CONC-4 (SHOULD).** Progress reporting (rows done / total / errors) MUST remain coherent under concurrency (a thread-safe counter or `rich` progress bar).
+
+### 16.5 Per-metric model env overrides
+
+**FR-MODELOV-1 (MUST).** A per-metric model override cascade is added to `Settings`: `PLUMB_JUDGE_MODEL_<METRIC_NAME_UPPER>` (e.g. `PLUMB_JUDGE_MODEL_PLAN_FAILURE=claude-opus-4-7`). Resolution order: explicit `--model` CLI flag → per-metric env var → global `PLUMB_JUDGE_MODEL` → adapter default. This generalizes the v1.0 routing/handoff overrides (INT-JUDGE-1) to *any* metric.
+
+**FR-MODELOV-2 (MUST).** Override resolution lives in the judge-adapter factory (`get_judge_adapter`), not scattered through call sites. Cheap binary metrics can target a Haiku-class model; plan-vs-exec / MAST can target Opus — without per-call `--model` flags.
+
+### 16.6 v1.2 NFRs (deltas)
+
+**NFR-CONC-1 (SHOULD).** With `--concurrency 8`, a 200-run judge backlog SHOULD complete in ≤ **1/4** the wall-clock of the sequential path on the same hardware/endpoint (network-bound; subject to provider rate limits). This targets the backlog's ">5 min for 200 runs" revisit trigger.
+
+**NFR-CONC-2 (MUST).** Concurrency MUST NOT change recorded results: the set of `scores` rows produced by `--concurrency N` MUST equal the set produced by `--concurrency 1` for the same input (determinism of *content*, not of *order*).
+
+### 16.7 v1.2 acceptance criteria
+
+**AC-PLANEX-1** (→ FR-PLANEX-1).
+*Given* a failed run R with a recorded plan and `sub_agent_model`, *When* the plan-vs-exec recipe re-runs R's plan with a stronger executor that succeeds, *Then* a `scores` row with `metric_name='execution_failure'`, `scorer='judge'`, and a populated `scorer_version` is written for R.
+
+**AC-MAST-1** (→ FR-MAST-1/4).
+*Given* ≥ 30 failed runs with human-confirmed MAST labels, *When* the MAST tagger runs and is compared to the human labels, *Then* per-mode agreement is reported AND each tagged run has ≥ 1 `scores` row with `metric_name='mast_mode'` and a valid `value_label` mode-id. (Release gate: tagger is not quoted publicly below this bar.)
+
+**AC-CALIB-1** (→ FR-CALIB-1/2).
+*Given* a metric with both judge and human `scores` rows on a shared held-out set, *When* `plumb judge calibrate --metric <name>` runs, *Then* it reports Krippendorff's α (judge vs human) and the human–human baseline α, with the held-out N stated.
+
+**AC-CONC-1** (→ FR-CONC-2/NFR-CONC-2).
+*Given* a 50-run backlog where the mock judge returns HTTP 429 on a subset, *When* `plumb judge run --concurrency 8` runs, *Then* the resulting `scores` rows are identical (as a set) to a `--concurrency 1` run, retried rows produce no duplicates (FR-IDEM-1), and per-row errors don't abort siblings.
+
+**AC-MODELOV-1** (→ FR-MODELOV-1).
+*Given* `PLUMB_JUDGE_MODEL_PLAN_FAILURE=claude-opus-4-7` and no `--model` flag, *When* the plan-failure judge runs, *Then* the adapter is invoked with `claude-opus-4-7`; *and given* a `--model` flag is also present, *then* the flag wins.
+
+---
+
+## 17. v2.0 — Analysis, scale & alternative judges (scope-level)
+
+**Goal.** Reporting frontiers, alternative judge backends, and judge throughput at scale. This is the largest, most experiment-/content-driven release; per PRD §10 it is the next *major* version. Maps to PRD §10 "v2.0 — Analysis, scale & alternative judges".
+
+**Specification depth (deliberate).** Unlike §§15–16, v2.0 is specified at **scope level only** — goals, engineering-scope summary, and exit criteria per feature cluster. Per-feature functional requirements and acceptance criteria are **deferred to each feature's TDS** under `dev/active/`, because these features are gated on real usage signals (cost audits, model-swap cadence, external adapter requests) that don't exist yet. Freezing detailed AC now would over-specify work the backlog itself marks "revisit on trigger." Each cluster below names its backlog entry and its **revisit trigger** — the signal that promotes it from scope-level to a detailed TDS.
+
+### 17.1 Reporting & analysis cluster
+
+**Scope.** Three read-only report commands over existing schema (no migration):
+- `plumb regression-eval` — variance decomposition: capability-eval (live tools) vs regression-eval (replayed/mocked tools) to isolate model stochasticity for model-swap decisions. Needs a tool-replay/transcript layer. *Backlog: "v1.1 — Variance decomposition." Trigger: model-swap cadence > 1/month.*
+- `plumb report efficiency-frontier` — Pareto plot of tokens-per-resolved-task × pass-rate (the metric ships in v1.0; the frontier *analysis* is here). *Backlog: "v2 — Communication overhead / efficiency frontier." Trigger: flagship post needs the chart.*
+- `plumb report router-frontier` — cost × accuracy Pareto per candidate routing policy (v1.0 routing-top-1 is a point estimate; this is the frontier). *Backlog: "v2 — Pareto-frontier router evaluation." Trigger: first routing-policy A/B test.*
+
+**Exit criteria.** Each command emits JSON/DataFrame (PRD "no custom dashboard" still holds — charts are one-off notebooks). No schema change. The regression-eval transcript/replay layer is the only non-trivial new component and gets its own TDS.
+
+### 17.2 Alternative judge backends cluster
+
+**Scope.** Extend the judge layer beyond the two v1.0 adapters:
+- **Judge-adapter Protocol/ABC extension seam** — the published `JudgeAdapter` Protocol becomes a *supported third-party extension point* (Bedrock / Vertex / corp gateways). This gates the two items below. *Backlog Group A "Judge adapters" + Deferred list. Trigger: a concrete third-party adapter (Bedrock/Vertex) is requested.*
+- **Luna-2-style SLM judges at 100% coverage** — third adapter `plumb.adapters.judge_slm.SLMJudge` (local Ollama/vLLM small model or a hosted SLM endpoint) for cheap full-coverage judging. *Backlog: "v2 — Luna-2-style SLM judges." Trigger: judge spend > ~$10/week.*
+- **Multi-judge consensus / ensembling** — run a metric through multiple providers, aggregate by majority. `scorer_version` becomes a composite; `write_score` grows a consensus step. *Backlog: "v2 — Multi-judge consensus." Trigger: single-judge α < 0.7 vs human.*
+- **Streaming verdicts** — streaming `messages.create`/`chat.completions` for time-to-first-token on long rationales. *Backlog: "v2 — Streaming verdicts." Trigger: interactive judge UX need.*
+- **Tool-use judges (CLI-style)** — judges that call tools/run code; depends on both the Protocol seam *and* a stable stateless judging mode (breaks `scorer_version` determinism otherwise). *Backlog: "v2 — Tool-use judges" + Group A "Agentic-CLI-backed judge adapter." Trigger: both conditions hold.*
+
+**Exit criteria.** The Protocol/ABC seam is documented and at least one alternative backend (SLM **or** an external Protocol adapter) ships against it. Consensus/streaming/tool-use judges remain individually trigger-gated and MAY ship later within the v2.x line. Any adapter that breaks `scorer_version` determinism (tool-use, agentic CLI) MUST NOT ship until the determinism contract is reconciled (this is the standing blocker from `deferred-features.md`).
+
+### 17.3 Long-running agent & reporting-ergonomics cluster
+
+**Scope.**
+- **Long-running-agent extension** — subgoal annotation, loop/oscillation/stagnation detection, checkpointing metrics. This is the **one v2.0 item that may require a schema change** (a `subgoals` representation); `spans.parent_span_id` + `runs.parent_run_id` are forward-compatible, but subgoal metadata may need a new additive column. Its TDS MUST decide migration vs. fold-into-spans. *Backlog: "v2 — Long-running agent extension." Trigger: first atlas component exceeds 30-min single-run duration.*
+- **`plumb run stats` top-level-only display** — `--include-children` flag to suppress sub-agent child runs by default. *Backlog: "v2 — run stats top-level-only." Trigger: first complaint about child-run clutter, or >50% of runs are children.*
+- **File-backed prompt edit UX** — `plumb judge prompt create/list/show` for managing `judge_prompts/`. *Backlog: "v1.1 — File-backed prompt edit UX." Trigger: user confusion about prompt-file location/versioning.*
+- **WAL/SHM file permissions hardening** — chmod `*.db-wal` / `*.db-shm` to `0600` for shared-machine posture. *Backlog: "v1.1 — WAL/SHM permissions." Trigger: WAL leak report OR shared-CI use.*
+
+**Exit criteria.** Each ships independently when its trigger fires; none blocks the others. The long-running-agent extension is the only item that may touch the schema, and if it does, it follows the DATA-MIG-2/3/4 additive-migration contract (one migration, additive, transactional, `user_version` bump) established in v1.1 — **not** a fifth table.
+
+### 17.4 v2.0 standing constraints (still in force)
+
+These PRD §7 non-goals remain **permanent** through v2.0 and are NOT renegotiated by any cluster above:
+- **No fifth SQL table** (the four-table constraint is the thesis).
+- **No runtime blocking / guardrails** (after-the-fact eval only).
+- **No SaaS / multi-tenant / auth** beyond the loopback read service.
+- **No custom dashboard** (reports emit JSON/DataFrame; charts are notebooks).
+
+---
+
+## 18. Development Phases
+
+Engineering phases map 1:1 to PRD §10 releases (per the *Shared Nomenclature*: a Phase is an engineering tranche delivering one or more PRD Releases). Task-level breakdown for each phase is produced per-phase by the `/dev-docs-be` TRS command under `dev/active/[task-name]/`; it is NOT enumerated here.
+
+### Phase 1 — v1.0 (shipped)
+
+- **Goal:** Minimal measurement spine — four tables, two entry points, ten metrics, CLI, read-only HTTP, ATTACH backfill, two judge adapters.
+- **Delivers Release(s):** `v1.0`.
+- **Dependencies:** none.
+- **Engineering Scope Summary:** `plumb/core` (entities, ports, stats), `plumb/api.py` (decorator + context manager), `plumb/adapters` (sqlite, blobstore, two judges, agentsview attach), `plumb/cli.py`, `plumb/http.py`, autocapture installers. `SCHEMA_VERSION=1`.
+- **Exit Criteria:** all §13 v1.0 acceptance criteria pass; PRD §8 Tier-1 gates met; `SCHEMA_VERSION=1`, zero migrations. **Status: COMPLETE** (package 1.0.x).
+
+### Phase 2 — v1.1 (next release)
+
+- **Goal:** Unblock atlas integration and close silent-data-loss gaps via one additive schema migration plus the two renegotiated API additions.
+- **Delivers Release(s):** `v1.1`.
+- **Dependencies:** Phase 1.
+- **Engineering Scope Summary:** the schema-v2 migration machinery in `plumb/adapters/_schema.py` + `storage_sqlite.py` (`_bootstrap_schema` migration arm, additive DDL, duplicate pre-check, transactional apply, `SCHEMA_VERSION=2`); `scores.rationale` + `spans.tokens_in/out` round-trip in `_score_to_row`/`_row_to_score`/`_span_to_row`/`_row_to_span`; `idx_scores_idem` UNIQUE index + `INSERT ... ON CONFLICT` write path + `idempotency_key` on `add_score`/`plumb score write`; `plumb.resume_run` third entry point + adapter `open_or_resume`; `RunHandle.add_example` fifth method. Doc updates: PRD §7/§8 already reflect the gate renegotiation; CLAUDE.md/getting_started as needed.
+- **Exit Criteria:** all §15.8 acceptance criteria (AC-RESUME-*, AC-ADDEX-*, AC-MIG-*, AC-RATIONALE-1, AC-TOKENS-*, AC-IDEM-*) pass; migration is one-shot, additive, transactional, and abort-safe on duplicates (AC-MIG-3/4); `SCHEMA_VERSION=2` and schema re-frozen; all §13 v1.0 ACs still pass against a migrated database (no regression).
+
+### Phase 3 — v1.2 (metric depth)
+
+- **Goal:** Richer failure analysis for the flagship long-form post, with **no** schema migration.
+- **Delivers Release(s):** `v1.2`.
+- **Dependencies:** Phase 2 (needs the judge-throughput/concurrency path and the migrated schema in place; this is the PRD §10 dependency-driven renumber from backlog "v1.1").
+- **Engineering Scope Summary:** plan-vs-execution counterfactual recipe (new judge mode writing `plan_failure`/`execution_failure` scores); MAST 14-mode tagger (judge prompt + versioned mode vocabulary in `judge_prompts/`); Krippendorff's α calibration helper in `plumb.stats` + `plumb judge calibrate` CLI; `--concurrency N` thread-pool in `plumb judge run` with serialized writes; per-metric `PLUMB_JUDGE_MODEL_<METRIC>` override cascade in `Settings`/`get_judge_adapter`. `user_version` stays `2`.
+- **Exit Criteria:** all §16.7 acceptance criteria pass; MAST tagger validated against ≥ 30 human-labeled failed runs (AC-MAST-1 release gate) before any public quotation; `--concurrency` produces results identical-as-a-set to sequential (NFR-CONC-2); zero schema migration (`user_version` unchanged at 2).
+
+### Phase 4 — v2.0 (analysis, scale & alternative judges)
+
+- **Goal:** Reporting frontiers, alternative judge backends, judge throughput at scale, long-running-agent support — each shipping when its trigger fires.
+- **Delivers Release(s):** `v2.0` (major).
+- **Dependencies:** Phase 3 for the metric foundations the reports analyze; the judge-backend cluster depends on the Protocol/ABC seam shipping first.
+- **Engineering Scope Summary:** report commands (`regression-eval` with a tool-replay layer, `report efficiency-frontier`, `report router-frontier`); judge-adapter Protocol/ABC extension seam → SLM judge adapter, multi-judge consensus, streaming verdicts, tool-use judges (each trigger-gated, determinism-blocked where applicable); long-running-agent extension (subgoal annotation, loop/stagnation detection — the only cluster that may require an additive migration, following the Phase 2 contract); `plumb run stats --include-children`; `plumb judge prompt` UX; WAL/SHM permission hardening. Per-feature FR/AC produced in each feature's TDS (§17 is scope-level by design).
+- **Exit Criteria:** per-cluster — the reporting cluster emits JSON/DataFrame with no schema change; the judge cluster ships the documented Protocol seam + ≥ 1 alternative backend; the long-running-agent extension (if it migrates) follows the additive `user_version` bump contract and a fresh full-suite regression. The four §17.4 standing constraints (no fifth table, no guardrails, no SaaS, no dashboard) hold throughout.
+
+---
+
+## 19. Appendix — Follow-ups requested
+
+These are TRD-acceptance-blocking or TRD-deferred items. Resolution is tracked outside this document.
+
+**v1.0 (historical — resolved at v1.0 ship):**
+
+1. **User sign-off on the ports-and-adapters deviation** from CLAUDE.md's literal three-folder mandate (§5.3 Assumption 1). *Resolved — v1.0 shipped on the ports-and-adapters layout (see `CLAUDE.md` source-code section).*
+2. **Proposed follow-up edit to CLAUDE.md** to document plumb's actual convention. *Resolved — `CLAUDE.md` now documents the ports-and-adapters layout.*
+3. **Rewrite of `[docker-compose.yml](../../docker-compose.yml)` and `[../3_guides/core_concepts.md](../3_guides/core_concepts.md)`** to remove the web-app framing (§8.5).
+4. **First TDS** translating the v1.0 TRD into an implementation plan. *Resolved — v1.0 feature folders archived under `dev/archive/` (v1-core-and-api, v1-storage-adapter, v1-cli, v1-http, v1-judge-adapters, v1-autocapture).*
+
+**v1.1 → v2.0 (open):**
+
+5. **Per-phase TRS task lists.** Run the `/dev-docs-be` command per phase (Phase 2 first) to produce flat task lists under `dev/active/[task-name]/`. Phase 2 (v1.1) is the next to detail.
+6. **Schema-and-metrics-v1 doc update.** When v1.1 lands, `schema-and-metrics-v1.md` should reflect the `user_version=2` additive columns (`scores.rationale`, `spans.tokens_in/out`) and the `idx_scores_idem` index, so the canonical schema doc stays authoritative.
+7. **Documented manual-dedup recipe** referenced by DATA-MIG-6's abort message — a short `getting_started`/migration note showing how to resolve pre-existing duplicate score rows before a v1.1 upgrade.
+
+---
+
+*End of TRD — v1.0 baseline (§§1–13) + v1.1 / v1.2 / v2.0 roadmap (§§14–19).*
