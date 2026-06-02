@@ -26,7 +26,7 @@ class TestPublicSurface:
         assert "autocapture_is_installed" in plumb.__all__
 
     def test_version_literal(self) -> None:
-        assert plumb.__version__ == "0.1.0"
+        assert plumb.__version__ == "1.0.1"
 
     def test_run_handle_construct_guard(self) -> None:
         """AC-API-1: RunHandle() raises TypeError — not a user-constructible entry point."""

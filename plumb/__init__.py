@@ -26,7 +26,7 @@ from plumb.core.errors import (
     ValidationError,
 )
 
-__version__ = "0.1.0"  # hardcoded per context §6 item 1; switch to importlib.metadata at PyPI ship
+__version__ = "1.0.1"  # hardcoded per context §6 item 1; switch to importlib.metadata at PyPI ship
 
 __all__ = [
     "run",

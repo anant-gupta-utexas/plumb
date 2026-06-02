@@ -1,9 +1,9 @@
 ---
 project: plumb
-status: v1-shipped
+status: v1-shipped (v1.0.1)
 phase: v1 (Phase 11 complete, Week 5)
 last_updated: 2026-06-01
-next_gate: tag v1.0.0
+next_gate: none (ready for PyPI)
 blocked_on: null
 ---
 
@@ -25,8 +25,7 @@ note (TRD §5.3), blob-resolution path. All Phase 1–4 tasks complete. 630+ uni
 
 ## Next
 
-- Merge PR #21 (README + v1-judge-adapters archive + version bump + v1-http archive).
-- Tag `v1.0.0` once PR #21 passes full CI.
+- None. v1.0.1 ready for PyPI publication.
 
 ## Blocked / waiting
 

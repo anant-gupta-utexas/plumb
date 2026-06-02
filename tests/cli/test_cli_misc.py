@@ -19,7 +19,7 @@ runner = CliRunner()
 def test_version_output() -> None:
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "plumb 0.1.0" in result.output
+    assert "plumb 1.0.1" in result.output
 
 
 # ---------------------------------------------------------------------------
