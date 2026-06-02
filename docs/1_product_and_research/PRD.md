@@ -1,6 +1,6 @@
 # plumb — Product Requirements Document
 
-**Status:** Draft (Phase 0 → Phase 1 hand-off)
+**Status:** v1.0 shipped; v1.1 / v1.2 / v2.0 roadmap added (2026-06-01)
 **Owner:** anant
 
 ---
@@ -76,8 +76,11 @@ failure mode. Derived in [`./schema-and-metrics-v1.md`](./schema-and-metrics-v1.
 9. Intervention rate
 10. pass^3 on a reliability subset
 
-v1.1 adds plan-vs-execution attribution and MAST-style 14-mode failure
-tagging. Everything else is explicitly v2 or out-of-scope (see §7).
+The metric set is extended in later releases: **v1.2** adds plan-vs-execution
+attribution, MAST-style 14-mode failure tagging, and judge calibration against a
+human α baseline. Everything else is **v2.0** or out-of-scope (see §7). The full
+sequencing lives in §10 Release Plan; the deferred-options backlog with
+per-decision rationale is in [`../2_architecture/deferred-features.md`](../2_architecture/deferred-features.md).
 
 ## 5. Schema
 
@@ -154,6 +157,20 @@ plumb judge run --model claude-sonnet-4-6 --metric routing_top1
 files (e.g. `~/.agentsview/db.sqlite`): ~200 LOC adapter, no ETL, no nightly
 job. Gives 14 coding agents of historical data for free.
 
+**Post-v1.0 surface additions (v1.1).** v1.0 deliberately capped the surface at
+two entry points and four `RunHandle` methods. Real atlas dogfooding surfaced
+two gaps that the existing surface can't cover without ugly workarounds, so v1.1
+renegotiates the surface gate (see §7 and §10):
+
+```python
+# v1.1 — continue an existing run from a second process (atlas code_gen stage)
+with plumb.resume_run(run_id="...") as r:   # third entry point
+    r.add_span(...)
+
+# v1.1 — record a rejection example from inside an active run
+r.add_example(inputs_hash="...", source="production_promotion", rubric="...")  # fifth handle method
+```
+
 ## 7. Non-goals
 
 Explicit, because drift here is the single biggest failure mode for this
@@ -162,9 +179,22 @@ work to v2 or ignore.
 
 - **No fifth table.** Surveys, ESM prompts, cost ledgers all fold into
   existing tables (`runs.kind='survey'`, `scores.scorer='user_signal'`) or
-  wait for v2. Four tables is the constraint.
-- **No third entry point.** Decorator + context manager is the full surface.
-  No class hierarchy, no plugin system, no middleware pattern.
+  wait for v2. Four tables is the constraint. *(Still holds through v2.0. The
+  v1.1 schema migration is additive — new columns/indexes on the four existing
+  tables, no fifth table.)*
+- ~~**No third entry point.**~~ → **Renegotiated in v1.1.** v1.0 capped the
+  surface at decorator + context manager. v1.1 adds `plumb.resume_run(run_id)`
+  as a third entry point because atlas's cross-process `code_gen` continuation
+  cannot be expressed with the child-run workaround without losing same-run
+  span lineage. Still no class hierarchy, no plugin system, no middleware
+  pattern — the addition is one named callable with a documented contract.
+  Rationale: atlas dogfooding is now the load-bearing user, and surface
+  minimalism is no longer worth blocking a real integration need. See §10 v1.1.
+- ~~**Exactly four `RunHandle` methods.**~~ → **Renegotiated in v1.1.** v1.0
+  capped the handle at `add_score` / `add_span` / `set_models` / `abort`. v1.1
+  adds `add_example(...)` as a fifth method so callers can record rejection
+  examples programmatically from inside an active run, instead of reaching into
+  the adapter layer. See §10 v1.1.
 - **No custom dashboard.** Queries return JSON/DataFrame; visualization is
   out-of-scope. (If a post needs a chart, it ships as a one-off notebook.)
 - **No SaaS.** Not a product. Not multi-tenant. Single-user SQLite file.
@@ -189,6 +219,16 @@ Tiered, covering both technical correctness and external reach.
 | Backfill coverage             | ≥ 2 weeks Claude Code sessions via ATTACH                 | ≥ 8 weeks                                       |
 | Schema stability              | Zero schema migrations after Week 4                       | Zero migrations through Week 9                  |
 | Entry-point surface           | Decorator + context manager only                          | Unchanged — a third entry point is a regression |
+
+> **Gate update (2026-06-01, post-v1.0).** Two v1.0 Tier-1 gates are
+> deliberately renegotiated for the v1.1 roadmap, not regressed:
+> - **Schema stability** held through v1.0 (`SCHEMA_VERSION = 1`, zero
+>   migrations). v1.1 performs *one* documented, additive migration
+>   (`user_version` 1→2) and re-freezes the schema after it. The "zero
+>   migrations within a release" discipline is preserved per-release.
+> - **Entry-point surface** is intentionally widened in v1.1 (third entry
+>   point `resume_run` + fifth handle method `add_example`) to unblock atlas.
+>   This is a tracked decision (§7, §10), not an un-noticed regression.
 | Judge drift guard             | `scorer_version` on every judge row                       | Judge re-calibration run completed              |
 | Offline → online link         | `examples.origin_run_id` populated on ≥ 1 promoted case   | ≥ 10 promoted cases                             |
 | CI regression gate            | Regression run passes on 200-task set with paired McNemar | Same, under a cost budget                       |
@@ -222,8 +262,106 @@ the flagship post has no data to stand on.
   [`./schema-and-metrics-v1.md`](./schema-and-metrics-v1.md) supersedes it for v1 shape. The PRD
   points at the schema-and-metrics-v1 doc, not the raw literature synthesis, for v1 decisions.
 
-## 10. Links
+## 10. Release Plan
+
+v1.0 shipped (package version 1.0.x): four-table schema, decorator +
+context-manager entry points, CLI, read-only HTTP service, ATTACH backfill, two
+judge adapters, and the ten v1 metrics. The releases below sequence the deferred
+backlog. Each entry maps back to a dated decision in
+[`../2_architecture/deferred-features.md`](../2_architecture/deferred-features.md)
+(the "From backlog" column), which holds the full per-option rationale.
+
+Sequencing principle: **dependency before label.** The backlog labels some
+metric work "v1.1", but that work sits *behind* the schema/atlas migration in
+dependency order, so it is renumbered to **v1.2** here. The PRD Release Plan is
+the authority; the backlog labels are traceability pointers, not commitments.
+
+### v1.0 — shipped (baseline)
+
+- Theme: minimal measurement spine — four tables, two entry points, ten metrics.
+- Status: released, `SCHEMA_VERSION = 1`, zero migrations.
+
+### v1.1 — Atlas unblock + schema v2 (next release)
+
+- **Theme / Goal:** Close the silent-data-loss gaps and unblock the atlas
+  integration. One additive schema migration (`user_version` 1→2) carries the
+  whole data cluster; the surface gate is renegotiated for the two API items.
+- **Target timeframe:** MVP+1 (next release).
+- **Features included:**
+
+  | Feature | From backlog | Notes |
+  | --- | --- | --- |
+  | `scores.rationale` durable column | "v2 — `scores.rationale` durable column" (2026-05-06) | DDL + `_score_to_row`/`_row_to_score` round-trip; entity field already exists. |
+  | Idempotent score ingestion | "v2 — Idempotent score ingestion" (2026-05-06) | UNIQUE index on `(run_id, metric_name, scorer_version, span_id)`; `idempotency_key` on `add_score` + `plumb score write`. |
+  | `spans.tokens_in` / `tokens_out` split | "v2 — Span `tokens_in` / `tokens_out` column split" (2026-04-29) | Splits the collapsed `spans.tokens` column; fixes the round-trip in/out asymmetry. |
+  | `plumb.resume_run(run_id)` | "v2 — `plumb.resume_run(run_id)`" (2026-05-06) | **Third entry point.** Renegotiates FR-API-1 (see §7). Atlas `code_gen` cross-process continuation. |
+  | `RunHandle.add_example(...)` | "v2 — `RunHandle.add_example(...)`" (2026-05-06) | **Fifth handle method.** Renegotiates FR-API-4 (see §7). |
+
+- **Schema discipline:** exactly one migration, additive only (no fifth table,
+  no destructive rewrites). `SCHEMA_VERSION` bumps to 2 and the schema re-freezes
+  for the rest of the release.
+- **Gate impact:** widens the entry-point surface (§7, §8 gate update). This is
+  the deliberate philosophy shift — atlas dogfooding now outweighs strict
+  surface minimalism.
+
+### v1.2 — Metric depth (the flagship post needs this)
+
+- **Theme / Goal:** Richer failure analysis for the long-form write-up. No
+  further schema migration — every new score fits the existing `scores` table
+  via `metric_name`.
+- **Target timeframe:** MVP+2.
+- **Features included:**
+
+  | Feature | From backlog | Notes |
+  | --- | --- | --- |
+  | Plan-vs-execution attribution | "v1.1 — Plan-vs-execution attribution" | `scores.metric_name='plan_failure'`/`'execution_failure'`; re-run failed trajectories with a stronger executor. |
+  | MAST 14-mode failure tagging | "v1.1 — MAST 14-mode failure tagging" | `scores.metric_name='mast_mode'`, `value_label=<mode_id>`; needs ≥30 failed runs to validate. |
+  | Judge calibration vs human α | "v1.1 — Judge calibration against human-human α baseline" | Krippendorff's α on a labeled held-out set; the scaffold (`scorer_version`) already shipped in v1.0. |
+  | Concurrent judge calls (`--concurrency N`) | "v1.1 — Concurrent judge calls" | Thread-pool behind a flag; makes the above tractable at backlog scale. |
+  | Per-metric model env overrides | "v1.1 — Per-metric model env overrides" | Plan-vs-exec wants Opus, cheap binary metrics want Haiku. |
+
+- **Renumber note:** the backlog labels these "v1.1"; they are scheduled here as
+  v1.2 because they depend on v1.1's judge-throughput and migration work landing
+  first.
+
+### v2.0 — Analysis, scale & alternative judges
+
+- **Theme / Goal:** Reporting frontiers, alternative judge backends, and judge
+  throughput at scale. Experiment- and content-driven; the largest release.
+- **Target timeframe:** MVP+3 / next major version.
+- **Features included (each maps to a backlog entry):**
+  - Variance decomposition / regression-eval (`plumb regression-eval`).
+  - Efficiency-frontier report (`plumb report efficiency-frontier`).
+  - Router Pareto-frontier report (`plumb report router-frontier`).
+  - Long-running-agent extension (subgoal annotation, loop/stagnation detection).
+  - Luna-2-style SLM judges at 100% coverage (third judge adapter).
+  - Multi-judge consensus / ensembling.
+  - Streaming verdicts.
+  - Tool-use judges (CLI-style) — depends on the Protocol/ABC extension seam.
+  - File-backed prompt edit UX (`plumb judge prompt create/list/show`).
+  - `plumb run stats` top-level-only display (`--include-children` flag).
+
+### Deferred Features (no commitment, revisit on trigger)
+
+These are recorded in the backlog but **not scheduled** into any release above.
+
+- **Judge-adapter Protocol/ABC extension seam** — gates SLM and tool-use
+  judges; ship only when a concrete third-party adapter (Bedrock/Vertex) is
+  requested. *Low ROI until a real external adapter need exists.*
+- **Agentic-CLI-backed judge adapter (ClaudeCodeJudge / CodexCLIJudge)** —
+  breaks `scorer_version` determinism; blocked on both a stable CLI judging mode
+  *and* the Protocol seam above. *Won't do until both conditions hold.*
+- **WAL/SHM file permissions hardening** — single-user local posture makes this
+  low-priority; revisit if plumb runs in shared/multi-user CI. *Low ROI vs.
+  FileVault/LUKS already covering the threat.*
+- **Runtime blocking / guardrails** — permanent non-goal (§7 philosophy split).
+  *Won't do; a different product.*
+- **Fifth SQL table** — permanent non-goal; the four-table constraint is the
+  thesis. *Won't do.*
+
+## 11. Links
 
 - Canonical schema + metric derivation: [`./schema-and-metrics-v1.md`](./schema-and-metrics-v1.md)
+- Deferred-options backlog (per-decision rationale): [`../2_architecture/deferred-features.md`](../2_architecture/deferred-features.md)
 - Research backlog (literature synthesis): [`./measurement-framework-research.md`](./measurement-framework-research.md)
 - Project README: [`../../README.md`](../../README.md)

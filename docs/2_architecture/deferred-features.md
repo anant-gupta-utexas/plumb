@@ -17,6 +17,8 @@
 > ```
 >
 > **Adding entries.** Append a new section at the bottom of the relevant group. Never silently remove or edit historical entries — supersede with a new dated entry and update the old one's Decision line (e.g., `~~deferred to v1.1~~ → shipped in v1.2, see entry dated 2026-08-01`).
+>
+> **Scheduling note (2026-06-01).** The PRD §10 Release Plan now schedules many of these entries into concrete releases (v1.1 / v1.2 / v2.0). The PRD is the authority for *what ships when*; this file remains the authority for *why each option was picked*. Entries scheduled into a release have their Decision line annotated with `→ scheduled PRD §10 vX.Y`. Note some entries dated as "v1.1" here were renumbered to v1.2 in the PRD (dependency ordering); the annotation reflects the PRD-authoritative release.
 
 ---
 
@@ -118,7 +120,7 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ### v1.1 — Plan-vs-execution attribution
 
-- **Decision:** deferred to v1.1
+- **Decision:** deferred to v1.1 → scheduled PRD §10 v1.2 (renumbered: depends on v1.1 judge-throughput work)
 - **Date:** 2026-04-23 (recorded); PRD §4 sets the target window.
 - **Context:** When a trajectory fails, was it the planner that hallucinated a bad step, or the executor that flubbed a clean plan? SWE-EVO (arXiv:2512.18470) shows stronger models fail predominantly on plan-side, weaker on execution-side. A cheap counterfactual recipe exists.
 - **Options considered:**
@@ -129,7 +131,7 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ### v1.1 — MAST 14-mode failure tagging
 
-- **Decision:** deferred to v1.1
+- **Decision:** deferred to v1.1 → scheduled PRD §10 v1.2 (renumbered: depends on v1.1 judge-throughput work)
 - **Date:** 2026-04-23 (recorded); PRD §4.
 - **Context:** Cemri et al.'s MAST taxonomy (arXiv:2503.13657) classifies multi-agent failures into 14 modes across three categories. Having each failed run tagged with one or more MAST modes makes failure dashboards instantly meaningful.
 - **Options considered:**
@@ -151,7 +153,7 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ### v1.1 — Judge calibration against human-human α baseline
 
-- **Decision:** deferred to v1.1
+- **Decision:** deferred to v1.1 → scheduled PRD §10 v1.2 (renumbered)
 - **Date:** 2026-04-23
 - **Context:** Krippendorff's α between judge and human is the right reliability metric; needs a small human-labeled held-out set. PRD §8 Tier-1 "Judge drift guard" is scaffold (version every row); the calibration run itself is v1.1.
 - **Rationale for current pick:** Scaffold first (done in v1 via `scorer_version`), measure second (v1.1), act third (v2 calibration-aware judges).
@@ -261,7 +263,7 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ### v2 — Span `tokens_in` / `tokens_out` column split
 
-- **Decision:** deferred to v2
+- **Decision:** ~~deferred to v2~~ → scheduled PRD §10 v1.1 (pulled forward onto the v1.1 user_version 1→2 migration)
 - **Date:** 2026-04-29
 - **Context:** The TRD §7.1 schema has a single `spans.tokens INTEGER` column. The `Span` entity carries both `tokens_in` and `tokens_out` fields, but on write only their sum is stored. On read, the sum is surfaced as `tokens_in`; `tokens_out` is always `None`. This is documented in the `Span` docstring and in `_row_to_span`. The user-visible API therefore silently loses the in/out split after a round-trip.
 - **Options considered:**
@@ -301,7 +303,7 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ### v1.1 — Per-metric model env overrides
 
-- **Decision:** deferred to v1.1
+- **Decision:** deferred to v1.1 → scheduled PRD §10 v1.2 (renumbered)
 - **Date:** 2026-05-01
 - **Context:** `PLUMB_JUDGE_MODEL` sets a single global default. High-value metrics (e.g. plan-vs-execution) may benefit from Opus; cheap binary metrics can use Haiku. Users currently override with `--model` on every CLI invocation.
 - **Options considered:**
@@ -314,7 +316,7 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ### v1.1 — Concurrent judge calls
 
-- **Decision:** deferred to v1.1
+- **Decision:** deferred to v1.1 → scheduled PRD §10 v1.2 (renumbered)
 - **Date:** 2026-05-01
 - **Context:** `plumb judge run` currently judges runs sequentially. With large backlogs the wall-clock time is dominated by per-call latency.
 - **Options considered:**
@@ -379,7 +381,7 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ### v2 — `scores.rationale` durable column
 
-- **Decision:** deferred to v2
+- **Decision:** ~~deferred to v2~~ → scheduled PRD §10 v1.1 (pulled forward onto the v1.1 user_version 1→2 migration; atlas gate-review auditability)
 - **Date:** 2026-05-06
 - **Context:** The `Score` entity already carries a `rationale: str | None` field, and judge adapters produce rationale text from every LLM verdict. In v1, rationale is wired through the in-memory entity and `RunHandle.add_score(rationale=...)`, but the SQLite `scores` table has no column for it — the value is silently dropped at the storage boundary. This was surfaced by atlas's gate-review auditability requirement.
 - **Options considered:**
@@ -393,7 +395,7 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ### v2 — Idempotent score ingestion
 
-- **Decision:** deferred to v2
+- **Decision:** ~~deferred to v2~~ → scheduled PRD §10 v1.1 (pulled forward onto the v1.1 migration; UNIQUE index + idempotency_key)
 - **Date:** 2026-05-06
 - **Context:** Hook-style integrations (e.g. atlas replaying a CI event on the same commit/run) can fire `add_score` multiple times with the same semantic content, producing duplicate score rows. A UNIQUE constraint or UPSERT would prevent this. Surfaced by atlas's recommendation for an `idempotency_key` parameter.
 - **Options considered:**
@@ -407,7 +409,7 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ### v2 — `plumb.resume_run(run_id)` — same-run continuation across processes
 
-- **Decision:** deferred to v2
+- **Decision:** ~~deferred to v2~~ → scheduled PRD §10 v1.1 (FR-API-1 gate renegotiated in PRD §7; third entry point now allowed)
 - **Date:** 2026-05-06
 - **Context:** Atlas's `code_gen` stage needs to continue an orchestrator run from a second process, appending spans to the *same* `runs` row rather than creating a child run. The current `with run(...)` API always opens a new row (`INSERT` on enter) and finalises it on exit. Implementing continuation would add a third public entry point (`plumb.resume_run`) or a new mode on `run(...)`, both of which violate FR-API-1 (Tier-1 gating metric in PRD §8).
 - **Options considered:**
@@ -421,7 +423,7 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ### v2 — `RunHandle.add_example(...)` public method
 
-- **Decision:** deferred to v2
+- **Decision:** ~~deferred to v2~~ → scheduled PRD §10 v1.1 (FR-API-4 gate renegotiated in PRD §7; fifth handle method now allowed)
 - **Date:** 2026-05-06
 - **Context:** Atlas needs to record rejection examples programmatically from inside an active run, without constructing `Example` entities directly or calling the adapter layer. FR-API-4 mandates exactly four user-facing methods on `RunHandle` (`add_score`, `add_span`, `set_models`, `abort`) in v1; a fifth method violates this Tier-1 gating constraint.
 - **Options considered:**

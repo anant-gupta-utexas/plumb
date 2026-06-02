@@ -1,9 +1,9 @@
 ---
 project: plumb
-status: v1-shipped (v1.0.1)
-phase: v1 (Phase 11 complete, Week 5)
+status: v1.0.1 shipped; v1.1/v1.2/v2.0 roadmap defined (2026-06-01)
+phase: roadmap-planning (PRD §10 release plan + deferred backlog prioritized)
 last_updated: 2026-06-01
-next_gate: none (ready for PyPI)
+next_gate: v1.1 TRD & phase breakdown (atlas unblock + schema v2 migration)
 blocked_on: null
 ---
 
@@ -11,21 +11,36 @@ blocked_on: null
 
 ## Current
 
-v1.0.0 complete (2026-05-07). v1-http slice finalized: FastAPI read-only service (127.0.0.1:8765)
-with five endpoints (`/health`, `/runs`, `/runs/{id}`, `/examples`, `/stats/task/{id}`), connection
-pool (size 4), error handling (404/422/503/500 envelopes), OpenAPI docs. Schema bootstrap idempotent,
-stalled-run sweep optimized, percentile aggregations tested. E2E + perf tests passing (6 CI runs
-after macOS jitter budget fix). getting_started.md expanded with curl examples, loopback security
-note (TRD §5.3), blob-resolution path. All Phase 1–4 tasks complete. 630+ unit/integration/E2E tests.
+v1.0.1 shipped and stable (2026-05-07 → 2026-06-01). Four-table SQLite schema,
+decorator + context-manager entry points, CLI (`run stats`, `score write`, `example promote`,
+`judge run`), read-only HTTP service (127.0.0.1:8765), ATTACH-based backfill adapter,
+two judge adapters (Anthropic native + OpenAI-compatible), ten v1 metrics.
+630+ unit/integration/E2E tests, full test/lint passing. Ready for PyPI.
+
+**PRD roadmap complete (2026-06-01):** Three future releases prioritized from the
+deferred-options backlog ([docs/2_architecture/deferred-features.md](docs/2_architecture/deferred-features.md)):
+- **v1.1** — Atlas unblock: schema v2 migration (`user_version` 1→2) bundles
+  `scores.rationale` column, idempotent scoring, `tokens_in`/`tokens_out` split,
+  plus three new surface items (`resume_run`, `add_example`; renegotiates
+  FR-API-1/FR-API-4 gates).
+- **v1.2** — Metric depth: plan-vs-execution attribution, MAST 14-mode tagging,
+  judge calibration, concurrent judge calls, per-metric model overrides.
+- **v2.0** — Analysis & scale: frontier reports, SLM judges, ensembling,
+  streaming, tool-use judges, long-running agents.
 
 ## Recent (last 7 days)
 
-- v1-http finalization (2026-06-01): Fixed e2e test (use installed `plumb` binary), perf test fixture (seed 0x0...0), ruff lint (12 auto-fixes).
-- Archived `dev/active/v1-http/` → `dev/archive/v1-http/` post-finalization.
+- v1-http finalization (2026-05-31): E2E + perf tests fixed, archived slice.
+- PRD §10 Release Plan written (2026-06-01): v1.1/v1.2/v2.0 mapped with
+  traceability to deferred-features backlog.
+- Deferred-features backlog annotated (2026-06-01): 10 scheduled entries
+  marked `→ scheduled PRD §10 vX.Y` per backlog's supersede-don't-delete convention.
 
 ## Next
 
-- None. v1.0.1 ready for PyPI publication.
+- **v1.1 planning.** Tech Lead / TRD task: detail Phase 1 (schema v2 migration
+  + three new surface items). Unblocks atlas dogfooding.
+- PyPI publication (v1.0.1, when release readiness confirmed).
 
 ## Blocked / waiting
 
@@ -33,9 +48,10 @@ note (TRD §5.3), blob-resolution path. All Phase 1–4 tasks complete. 630+ uni
 
 ## Pointers
 
-- PRD: `docs/1_product_and_research/PRD.md`
-- TRD: `docs/2_architecture/TRD.md`
-- SDD: `docs/2_architecture/SYSTEM_DESIGN.md`
-- Atlas recommendations assessment: `docs/2_architecture/deferred-features.md` (v2+ entries, 2026-05-06)
+- **Roadmap authority:** `docs/1_product_and_research/PRD.md` §10 Release Plan
+- **Backlog authority:** `docs/2_architecture/deferred-features.md` (per-option
+  rationale; 10 items now scheduled, rest deferred or won't-do)
+- TRD (v1.0 authority): `docs/2_architecture/TRD.md`
+- SDD (v1.0 authority): `docs/2_architecture/SYSTEM_DESIGN.md`
 - Orchestrator handoff guide: `docs/3_guides/orchestrator_handoff.md`
 - Optional extras: `pyproject.toml`
