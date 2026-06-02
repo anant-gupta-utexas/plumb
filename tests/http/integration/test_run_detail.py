@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-
 _VALID_RUN_ID = "a" * 32
 _UNKNOWN_RUN_ID = "0" * 32
 

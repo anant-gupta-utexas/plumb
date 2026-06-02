@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
-from plumb._http_deps import StoragePool, _POOL_SIZE
+from plumb._http_deps import _POOL_SIZE, StoragePool
 
 
 def _make_pool(tmp_path: Path, pool_size: int = _POOL_SIZE) -> StoragePool:
@@ -44,9 +43,8 @@ def test_pool_acquire_returns_adapter(tmp_path: Path) -> None:
 def test_pool_closed_raises_on_acquire(tmp_path: Path) -> None:
     pool = _make_pool(tmp_path, pool_size=1)
     pool.close()
-    with pytest.raises(RuntimeError, match="closed"):
-        with pool.acquire():
-            pass
+    with pytest.raises(RuntimeError, match="closed"), pool.acquire():
+        pass
 
 
 # ---------------------------------------------------------------------------

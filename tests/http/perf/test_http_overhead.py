@@ -12,7 +12,6 @@ Budget table (from plan §11.2):
 
 from __future__ import annotations
 
-import statistics
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -46,7 +45,6 @@ def _seed_perf_db(db_path: Path, n: int) -> tuple[str, str]:
 
     adapter = SQLiteStorageAdapter(db_path, clock=_C())
     task_id = "perf.task"
-    first_run_id = "a" * 32
 
     for i in range(n):
         hex_id = format(i, "032x")
@@ -73,7 +71,7 @@ def _seed_perf_db(db_path: Path, n: int) -> tuple[str, str]:
         )
     )
     adapter.close()
-    return first_run_id, task_id
+    return format(0, "032x"), task_id
 
 
 @pytest.fixture(scope="module")
@@ -106,25 +104,33 @@ def _measure_p95(client: TestClient, url: str, reps: int) -> float:
 def test_health_p95(perf_client) -> None:  # type: ignore[no-untyped-def]
     client, _, _ = perf_client
     p95 = _measure_p95(client, "/health", _REPS)
-    assert p95 < _BUDGETS_MS["/health"], f"/health p95={p95:.1f}ms exceeds {_BUDGETS_MS['/health']}ms"
+    assert p95 < _BUDGETS_MS["/health"], (
+        f"/health p95={p95:.1f}ms exceeds {_BUDGETS_MS['/health']}ms"
+    )
 
 
 def test_runs_list_p95(perf_client) -> None:  # type: ignore[no-untyped-def]
     client, _, _ = perf_client
     p95 = _measure_p95(client, "/runs?limit=100", _REPS)
-    assert p95 < _BUDGETS_MS["/runs?limit=100"], f"/runs p95={p95:.1f}ms exceeds {_BUDGETS_MS['/runs?limit=100']}ms"
+    assert p95 < _BUDGETS_MS["/runs?limit=100"], (
+        f"/runs p95={p95:.1f}ms exceeds {_BUDGETS_MS['/runs?limit=100']}ms"
+    )
 
 
 def test_run_detail_p95(perf_client) -> None:  # type: ignore[no-untyped-def]
     client, run_id, _ = perf_client
     p95 = _measure_p95(client, f"/runs/{run_id}", _REPS)
-    assert p95 < _BUDGETS_MS["/runs/{run_id}"], f"/runs/{{id}} p95={p95:.1f}ms exceeds {_BUDGETS_MS['/runs/{run_id}']}ms"
+    assert p95 < _BUDGETS_MS["/runs/{run_id}"], (
+        f"/runs/{{id}} p95={p95:.1f}ms exceeds {_BUDGETS_MS['/runs/{run_id}']}ms"
+    )
 
 
 def test_examples_p95(perf_client) -> None:  # type: ignore[no-untyped-def]
     client, _, _ = perf_client
     p95 = _measure_p95(client, "/examples", _REPS)
-    assert p95 < _BUDGETS_MS["/examples"], f"/examples p95={p95:.1f}ms exceeds {_BUDGETS_MS['/examples']}ms"
+    assert p95 < _BUDGETS_MS["/examples"], (
+        f"/examples p95={p95:.1f}ms exceeds {_BUDGETS_MS['/examples']}ms"
+    )
 
 
 def test_stats_p95(perf_client) -> None:  # type: ignore[no-untyped-def]

@@ -520,53 +520,85 @@ wheels = [
 
 [[package]]
 name = "plumb"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
-    { name = "fastapi" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "rich" },
     { name = "tenacity" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "anthropic" },
+    { name = "fastapi" },
+    { name = "openai" },
+    { name = "rich" },
     { name = "typer" },
     { name = "uvicorn" },
+]
+cli = [
+    { name = "rich" },
+    { name = "typer" },
+]
+http = [
+    { name = "fastapi" },
+    { name = "uvicorn" },
+]
+judge = [
+    { name = "anthropic" },
+    { name = "openai" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "anthropic" },
+    { name = "fastapi" },
     { name = "hypothesis" },
     { name = "mypy" },
     { name = "openai" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "rich" },
     { name = "ruff" },
     { name = "scipy" },
+    { name = "typer" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi", specifier = ">=0.111" },
+    { name = "anthropic", marker = "extra == 'judge'", specifier = ">=0.40" },
+    { name = "fastapi", marker = "extra == 'http'", specifier = ">=0.111" },
+    { name = "openai", marker = "extra == 'judge'", specifier = ">=1.50" },
+    { name = "plumb", extras = ["cli"], marker = "extra == 'all'" },
+    { name = "plumb", extras = ["http"], marker = "extra == 'all'" },
+    { name = "plumb", extras = ["judge"], marker = "extra == 'all'" },
     { name = "pydantic", specifier = ">=2.6" },
     { name = "pydantic-settings", specifier = ">=2.2" },
-    { name = "rich", specifier = ">=13" },
+    { name = "rich", marker = "extra == 'cli'", specifier = ">=13" },
     { name = "tenacity", specifier = ">=9.0" },
-    { name = "typer", specifier = ">=0.12" },
-    { name = "uvicorn", specifier = ">=0.30" },
+    { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
+    { name = "uvicorn", marker = "extra == 'http'", specifier = ">=0.30" },
 ]
+provides-extras = ["cli", "http", "judge", "all"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "anthropic", specifier = ">=0.40" },
+    { name = "fastapi", specifier = ">=0.111" },
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "mypy", specifier = ">=1.10" },
     { name = "openai", specifier = ">=1.50" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.23" },
     { name = "pytest-cov", specifier = ">=5.0" },
+    { name = "rich", specifier = ">=13" },
     { name = "ruff", specifier = ">=0.4" },
     { name = "scipy" },
+    { name = "typer", specifier = ">=0.12" },
+    { name = "uvicorn", specifier = ">=0.30" },
 ]
 
 [[package]]

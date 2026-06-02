@@ -19,7 +19,6 @@ import pytest
 from plumb.adapters.judge_anthropic import AnthropicJudge
 from plumb.core.entities import JudgeResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

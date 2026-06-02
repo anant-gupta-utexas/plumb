@@ -2,8 +2,8 @@
 project: plumb
 status: v1-shipped
 phase: v1 (Phase 11 complete, Week 5)
-last_updated: 2026-05-07
-next_gate: tag v1.0.0; move dev/active/v1-http → dev/archive/v1-http
+last_updated: 2026-06-01
+next_gate: tag v1.0.0
 blocked_on: null
 ---
 
@@ -20,16 +20,13 @@ note (TRD §5.3), blob-resolution path. All Phase 1–4 tasks complete. 630+ uni
 
 ## Recent (last 7 days)
 
-- v1-http Phase 1–2 implementation (2026-05-07): schemas, pool, health, /runs endpoints.
-- v1-http Phase 3–4 implementation (2026-05-07): stats aggregation, error handlers, OpenAPI, E2E, perf.
-- Documentation finalization (2026-05-07): curl examples + security note + blob-resolution path.
-- CI perf budget raised 3→6 ms (2026-05-07) to account for macOS scheduler jitter on loaded runners.
+- v1-http finalization (2026-06-01): Fixed e2e test (use installed `plumb` binary), perf test fixture (seed 0x0...0), ruff lint (12 auto-fixes).
+- Archived `dev/active/v1-http/` → `dev/archive/v1-http/` post-finalization.
 
 ## Next
 
-- Merge PR #21 (README + v1-judge-adapters archive + version bump + v1-http).
+- Merge PR #21 (README + v1-judge-adapters archive + version bump + v1-http archive).
 - Tag `v1.0.0` once PR #21 passes full CI.
-- Move `dev/active/v1-http/` to `dev/archive/v1-http/` on main after merge.
 
 ## Blocked / waiting
 

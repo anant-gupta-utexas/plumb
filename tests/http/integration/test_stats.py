@@ -122,10 +122,18 @@ class TestGetTaskStats:
         resp = stats_only_client.get("/stats/task/atlas.task")
         body = resp.json()
         required_fields = {
-            "task_id", "since", "run_count", "success_rate",
-            "intervention_rate", "latency_ms_p50", "latency_ms_p95",
-            "dollar_cost_total", "tokens_in_total", "tokens_out_total",
-            "tokens_per_resolved_task", "metrics",
+            "task_id",
+            "since",
+            "run_count",
+            "success_rate",
+            "intervention_rate",
+            "latency_ms_p50",
+            "latency_ms_p95",
+            "dollar_cost_total",
+            "tokens_in_total",
+            "tokens_out_total",
+            "tokens_per_resolved_task",
+            "metrics",
         }
         assert required_fields <= body.keys()
 

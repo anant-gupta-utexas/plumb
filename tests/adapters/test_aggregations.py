@@ -118,8 +118,12 @@ class TestAggregateRunsForTask:
         assert abs(result.dollar_cost_total - 0.03) < 1e-9
 
     def test_successful_tokens_only_success_status(self, adapter: SQLiteStorageAdapter) -> None:
-        adapter.write_run(_run("a" * 32, status=RunStatus.SUCCESS, tokens_in=100, tokens_out=50), [])
-        adapter.write_run(_run("b" * 32, status=RunStatus.FAILURE, tokens_in=200, tokens_out=100), [])
+        adapter.write_run(
+            _run("a" * 32, status=RunStatus.SUCCESS, tokens_in=100, tokens_out=50), []
+        )
+        adapter.write_run(
+            _run("b" * 32, status=RunStatus.FAILURE, tokens_in=200, tokens_out=100), []
+        )
 
         result = adapter.aggregate_runs_for_task("task.a")
         # Only the success run: 100 + 50 = 150
@@ -138,9 +142,33 @@ class TestAggregateScoresForTask:
 
     def test_groups_by_metric_and_scorer(self, adapter: SQLiteStorageAdapter) -> None:
         adapter.write_run(_run("a" * 32), [])
-        adapter.write_score(_score("0" * 31 + "1", "a" * 32, metric_name="quality", scorer=ScorerKind.JUDGE, value_numeric=0.8))
-        adapter.write_score(_score("0" * 31 + "2", "a" * 32, metric_name="quality", scorer=ScorerKind.JUDGE, value_numeric=0.9))
-        adapter.write_score(_score("0" * 31 + "3", "a" * 32, metric_name="routing", scorer=ScorerKind.DETERMINISTIC, value_numeric=1.0))
+        adapter.write_score(
+            _score(
+                "0" * 31 + "1",
+                "a" * 32,
+                metric_name="quality",
+                scorer=ScorerKind.JUDGE,
+                value_numeric=0.8,
+            )
+        )
+        adapter.write_score(
+            _score(
+                "0" * 31 + "2",
+                "a" * 32,
+                metric_name="quality",
+                scorer=ScorerKind.JUDGE,
+                value_numeric=0.9,
+            )
+        )
+        adapter.write_score(
+            _score(
+                "0" * 31 + "3",
+                "a" * 32,
+                metric_name="routing",
+                scorer=ScorerKind.DETERMINISTIC,
+                value_numeric=1.0,
+            )
+        )
 
         result = adapter.aggregate_scores_for_task("task.a")
         assert len(result) == 2
@@ -173,12 +201,24 @@ class TestAggregateScoresForTask:
     def test_label_scores_collected(self, adapter: SQLiteStorageAdapter) -> None:
         adapter.write_run(_run("a" * 32), [])
         adapter.write_score(
-            _score("0" * 31 + "1", "a" * 32, metric_name="routing_top1",
-                   scorer=ScorerKind.DETERMINISTIC, value_numeric=None, value_label="pass")
+            _score(
+                "0" * 31 + "1",
+                "a" * 32,
+                metric_name="routing_top1",
+                scorer=ScorerKind.DETERMINISTIC,
+                value_numeric=None,
+                value_label="pass",
+            )
         )
         adapter.write_score(
-            _score("0" * 31 + "2", "a" * 32, metric_name="routing_top1",
-                   scorer=ScorerKind.DETERMINISTIC, value_numeric=None, value_label="fail")
+            _score(
+                "0" * 31 + "2",
+                "a" * 32,
+                metric_name="routing_top1",
+                scorer=ScorerKind.DETERMINISTIC,
+                value_numeric=None,
+                value_label="fail",
+            )
         )
 
         result = adapter.aggregate_scores_for_task("task.a")

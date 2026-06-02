@@ -77,5 +77,6 @@ files = ["plumb/core/"]
 asyncio_mode = "auto"
 markers = [
     "perf: performance benchmarks",
+    "e2e: end-to-end tests that spawn subprocesses (run with pytest tests/http/e2e/)",
 ]
 testpaths = ["tests"]

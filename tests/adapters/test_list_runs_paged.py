@@ -5,8 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import pytest
-
 from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
 from plumb.core.entities import Run, RunKind, RunStatus, Score, ScorerKind, Span, SpanKind
 
@@ -22,7 +20,9 @@ class _Clock:
 _BASE = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
 
 
-def _run(run_id: str, task_id: str = "t", kind: RunKind = RunKind.OFFLINE, offset_s: int = 0) -> Run:
+def _run(
+    run_id: str, task_id: str = "t", kind: RunKind = RunKind.OFFLINE, offset_s: int = 0
+) -> Run:
     start = _BASE + timedelta(seconds=offset_s)
     return Run(
         run_id=run_id,

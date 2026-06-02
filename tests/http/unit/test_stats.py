@@ -8,7 +8,6 @@ import pytest
 
 from plumb._http_stats import NotFoundError, _percentile, compute_task_stats
 
-
 # ---------------------------------------------------------------------------
 # _percentile helper
 # ---------------------------------------------------------------------------

@@ -12,7 +12,6 @@ import pytest
 from plumb.adapters.judge_anthropic import AnthropicJudge
 from plumb.core.errors import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # Constructor validation
 # ---------------------------------------------------------------------------
@@ -46,9 +45,7 @@ def test_accepts_injected_client() -> None:
 
 def test_name_and_version() -> None:
     client = MagicMock()
-    judge = AnthropicJudge(
-        api_key="sk-ant-test", prompt="p", prompt_sha="a1b2c3d4", client=client
-    )
+    judge = AnthropicJudge(api_key="sk-ant-test", prompt="p", prompt_sha="a1b2c3d4", client=client)
     assert judge.name == "anthropic"
     assert judge.version == "1"
 
@@ -57,7 +54,5 @@ def test_isinstance_judge_adapter() -> None:
     from plumb.core.ports import JudgeAdapter
 
     client = MagicMock()
-    judge = AnthropicJudge(
-        api_key="sk-ant-test", prompt="p", prompt_sha="a1b2c3d4", client=client
-    )
+    judge = AnthropicJudge(api_key="sk-ant-test", prompt="p", prompt_sha="a1b2c3d4", client=client)
     assert isinstance(judge, JudgeAdapter)

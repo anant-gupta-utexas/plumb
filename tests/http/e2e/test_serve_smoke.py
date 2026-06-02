@@ -83,9 +83,10 @@ def test_serve_smoke(tmp_path: Path) -> None:
     run_id = _seed_db(db_path)
     port = _free_port()
 
+    plumb_bin = Path(sys.executable).parent / "plumb"
     env = {**os.environ, "PLUMB_DATA_DIR": str(tmp_path)}
     proc = subprocess.Popen(
-        [sys.executable, "-m", "plumb.cli", "serve", "--port", str(port)],
+        [str(plumb_bin), "serve", "--port", str(port)],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

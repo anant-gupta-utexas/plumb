@@ -19,7 +19,6 @@ import pytest
 from plumb.adapters.judge_openai_compat import OpenAICompatibleJudge
 from plumb.core.entities import JudgeResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

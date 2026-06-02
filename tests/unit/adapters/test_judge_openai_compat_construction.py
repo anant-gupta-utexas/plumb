@@ -12,7 +12,6 @@ import pytest
 from plumb.adapters.judge_openai_compat import OpenAICompatibleJudge
 from plumb.core.errors import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # Constructor validation
 # ---------------------------------------------------------------------------
@@ -67,9 +66,7 @@ def test_base_url_stored_when_provided() -> None:
 
 def test_name_and_version() -> None:
     client = MagicMock()
-    judge = OpenAICompatibleJudge(
-        api_key="sk-test", prompt="p", prompt_sha="sha", client=client
-    )
+    judge = OpenAICompatibleJudge(api_key="sk-test", prompt="p", prompt_sha="sha", client=client)
     assert judge.name == "openai_compat"
     assert judge.version == "1"
 
@@ -78,7 +75,5 @@ def test_isinstance_judge_adapter() -> None:
     from plumb.core.ports import JudgeAdapter
 
     client = MagicMock()
-    judge = OpenAICompatibleJudge(
-        api_key="sk-test", prompt="p", prompt_sha="sha", client=client
-    )
+    judge = OpenAICompatibleJudge(api_key="sk-test", prompt="p", prompt_sha="sha", client=client)
     assert isinstance(judge, JudgeAdapter)
