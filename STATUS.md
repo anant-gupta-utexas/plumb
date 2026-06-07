@@ -42,10 +42,21 @@ deferred-options backlog ([docs/2_architecture/deferred-features.md](docs/2_arch
 
 ## Next
 
+- **Decide the `spans.attributes` proposal (do this before the v1.1 migration is cut).**
+  New net-new item surfaced 2026-06-07: a nullable `attributes TEXT` JSON column
+  on `spans` for structured per-span data (ingestion counters, orchestrator
+  worker metadata, per-stage workflow context). Proposed to ride the v1.1
+  `user_version` 1→2 migration that is already scheduled — bundling is near-free,
+  deferring costs a second `SCHEMA_VERSION` bump. Tension: a free-form bag pushes
+  on the minimal-surface thesis, so pressure-test before accepting. See
+  [`docs/1_product_and_research/phase-2-prioritization.md`](docs/1_product_and_research/phase-2-prioritization.md)
+  and the dated backlog entry in
+  [`docs/2_architecture/deferred-features.md`](docs/2_architecture/deferred-features.md).
 - **v1.1 phase breakdown.** Run `/dev-docs-be` TRS command to produce flat task list
   under `dev/active/v1.1-schema-migration/` (or similar). Maps §15 FR/NFR/AC to
-  tasks. Unblocks atlas dogfooding.
-- **PyPI publication (v1.0.1).** Smoke test, then `uv publish`.
+  tasks (fold in `spans.attributes` if accepted above). Unblocks atlas dogfooding.
+- **PyPI publication (v1.0.1).** Smoke test, then `uv publish`. Independent of the
+  v1.1 work — can ship anytime.
 
 ## Blocked / waiting
 
