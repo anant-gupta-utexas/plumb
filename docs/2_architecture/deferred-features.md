@@ -435,4 +435,20 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ---
 
+### v1.1 — `spans.attributes` structured-data column (OTel-style span attributes)
+
+- **Decision:** deferred to v1.1 (proposed — fold onto the existing `user_version` 1→2 migration)
+- **Date:** 2026-06-07
+- **Context:** Today a span persists only `kind`, `name`, `input_hash`, `output_hash`, `tokens`, `latency_ms`, `status`, `error_type`. Callers routinely compute structured per-span counters at instrumentation time — e.g. an ingestion span that knows `items_fetched`, `items_new`, `items_skipped`, or an orchestrator worker span that knows `ticket_id`, `attempt_n`, `failure_mode`, `blocked_by`. There is no durable home for that data. The only escape hatch is to serialize it into `input_hash`/`output_hash` blob content (abusing a content-address field for structured metadata) or to smuggle it into the `task_id` string prefix. Both are workarounds that make the data unqueryable as first-class columns and muddy the metric/namespacing layer.
+- **Options considered:**
+  - *Status quo — blob/`task_id` smuggling* — Pro: no schema change. Con: structured per-span data is not queryable; `task_id`-prefix parsing is brittle; `input_hash` is a content-address, not a metadata bag.
+  - *Per-need named columns (e.g. add `items_fetched`, `attempt_n`)* — Pro: typed, indexable. Con: unbounded column sprawl; every new consumer triggers a migration; contradicts the four-table/minimal-surface thesis far more than one generic column does.
+  - **One nullable `attributes TEXT` JSON column on `spans`, folded onto the v1.1 migration (chosen-proposal)** — write `json.dumps(dict)` on `add_span`; read back as a `dict | None`. plumb does not interpret the keys. Pro: one column serves every consumer (ingestion counters, orchestrator worker metadata, per-stage workflow context); rides the migration v1.1 is *already* performing, so it costs zero additional `SCHEMA_VERSION` bumps; keeps the four-*table* constraint intact (it's a column, not a fifth table); SQLite's `json_extract` makes attributes queryable without a relational explosion. Con: a free-form bag is exactly the kind of surface the PRD thesis exists to resist — it can become a dumping ground; values are opaque to plumb's own metrics.
+  - *Wait for v2 as its own migration* — Pro: keeps v1.1's single-migration scope pristine. Con: pays a second `SCHEMA_VERSION` bump for what is one nullable additive column; delays unblocking consumers that want durable span data now.
+- **Rationale for current pick:** Three independent consumers want the same thing (ingestion-pipeline counters, orchestrator worker metadata, per-stage workflow context), which is the signal that the right abstraction is one generic field, not N named columns. Bundling it onto the already-scheduled v1.1 `user_version` 1→2 migration is near-free; deferring it to its own v2 migration is asymmetrically expensive (a whole release cycle for one column). The four-*table* thesis is preserved — this is a column. The minimal-*surface* thesis is the real tension and is the reason this is recorded as a proposal needing sign-off, not a done deal.
+- **Schema discipline note:** if accepted, this is an *additive nullable column* on the v1.1 migration — no destructive rewrite, no fifth table, `SCHEMA_VERSION` already bumping to 2 for v1.1. Mirror with a `Span.attributes: dict | None = None` entity field and round-trip it through `_span_to_row` / `_row_to_span` / the `_INSERT_SPAN` statement. Validate that the value is JSON-serializable at the API boundary (fail-closed on write, never on read).
+- **Revisit trigger:** Decision needed before the v1.1 migration is cut — once `user_version` bumps to 2 and the schema re-freezes, adding this becomes a v2 migration. If v1.1 ships without it, this entry re-files as v2.
+
+---
+
 *End of backlog. Append new entries at the bottom of the appropriate group.*
