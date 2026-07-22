@@ -2,8 +2,8 @@
 project: plumb
 status: v1.0.1 shipped; v1.1/v1.2/v2.0 TRD detailed (2026-06-02)
 phase: roadmap-specification (TRD §§14–19 normative for v1.1/v1.2; scope-level for v2.0)
-last_updated: 2026-06-02
-next_gate: v1.1 phase breakdown TRS (task list for schema v2 migration + three API additions)
+last_updated: 2026-07-21
+next_gate: v1.1 phase breakdown TRS (task list for schema v2 migration + API additions; §15 amended 2026-07-21 to seven features — adds set_usage + spans.attributes, see docs/1_product_and_research/atlas-unblock-v1.1-scope.md)
 blocked_on: null
 ---
 

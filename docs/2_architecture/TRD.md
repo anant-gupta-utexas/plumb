@@ -812,7 +812,7 @@ All acceptance criteria are stated in Given/When/Then form and tied back to a PR
 
 | Section | PRD §10 release | Theme | Schema impact | Surface impact | Spec depth |
 | --- | --- | --- | --- | --- | --- |
-| §15 | **v1.1** | Atlas unblock + schema v2 | **one** additive migration `user_version` 1→2 | +1 entry point (`resume_run`), +1 handle method (`add_example`) | Full normative FR/NFR/Data/AC |
+| §15 | **v1.1** | Atlas unblock + schema v2 | **one** additive migration `user_version` 1→2 (adds `scores.rationale`, `spans.tokens_in/out`, `idx_scores_idem`, `spans.attributes`) | +1 entry point (`resume_run`), +2 handle methods (`add_example`, `set_usage`) | Full normative FR/NFR/Data/AC |
 | §16 | **v1.2** | Metric depth (flagship post) | **none** — new scores fit existing `scores` table | none | Full normative FR/NFR/AC |
 | §17 | **v2.0** | Analysis, scale & alt judges | none expected (revisit per feature) | none expected | Scope-level only (per-feature AC → TDS) |
 | §18 | — | Development Phases | — | — | Phase→release mapping |
@@ -825,7 +825,10 @@ All acceptance criteria are stated in Given/When/Then form and tied back to a PR
 
 **Goal.** Close the silent-data-loss gaps surfaced by atlas dogfooding and unblock the atlas integration. One additive schema migration (`user_version` 1→2) carries the whole data cluster; the surface gate is renegotiated for two API items. Maps to PRD §10 "v1.1 — Atlas unblock + schema v2".
 
-**Five features** (each maps to a `deferred-features.md` entry):
+**Seven features** (each maps to a `deferred-features.md` entry). Features 6–7
+were added when an external consumer's needs were diffed against this section;
+their per-decision rationale and the acceptance-criteria detail live in
+[`../1_product_and_research/atlas-unblock-v1.1-scope.md`](../1_product_and_research/atlas-unblock-v1.1-scope.md):
 
 | # | Feature | Backlog entry | Type |
 | --- | --- | --- | --- |
@@ -834,6 +837,8 @@ All acceptance criteria are stated in Given/When/Then form and tied back to a PR
 | 3 | `scores.rationale` durable column | "v2 — `scores.rationale` durable column" (2026-05-06) | Schema (additive) |
 | 4 | Idempotent score ingestion | "v2 — Idempotent score ingestion" (2026-05-06) | Schema (additive index) + API |
 | 5 | `spans.tokens_in` / `tokens_out` split | "v2 — Span token column split" (2026-04-29) | Schema (additive) |
+| 6 | `set_usage(...)` run-level cost/usage writer | (scope doc, 2026-07-21) — no existing writer for `runs.dollar_cost`/`tokens_in`/`tokens_out` | API + storage (no schema) |
+| 7 | `spans.attributes` JSON column | "v1.1 — `spans.attributes` structured-data column" (2026-06-07) | Schema (additive) |
 
 ### 15.1 `plumb.resume_run(run_id)` — third entry point
 
@@ -893,6 +898,11 @@ r.add_example(
 - `ALTER TABLE scores ADD COLUMN rationale TEXT;` (§15.4)
 - `ALTER TABLE spans ADD COLUMN tokens_in INTEGER;` and `ALTER TABLE spans ADD COLUMN tokens_out INTEGER;` (§15.5)
 - `CREATE UNIQUE INDEX idx_scores_idem ON scores(run_id, metric_name, scorer_version, IFNULL(span_id, ''));` (§15.6)
+- `ALTER TABLE spans ADD COLUMN attributes TEXT;` (§15.8)
+
+Feature 6 (`set_usage`, §15.7) is **API + storage only** and contributes **no**
+`ALTER` to this list — the `runs.dollar_cost`/`tokens_in`/`tokens_out` columns
+already exist (v1.0 DDL); v1.1 only starts writing them on the online path.
 
 **DATA-MIG-3 (MUST).** The migration MUST be **idempotent and non-destructive**: it MUST NOT drop, rename, or rewrite any existing column or row, MUST NOT create a fifth table, and re-running a v1.1 build against an already-migrated (`user_version=2`) database MUST be a no-op. `SCHEMA_VERSION` bumps to `2`; after the migration runs, the schema re-freezes for the remainder of the v1.1 release line (DATA-MIG-1 discipline, preserved per-release).
 
@@ -930,9 +940,53 @@ r.add_example(
 
 **FR-IDEM-4 (MUST).** `idempotency_key` is **not** stored as a column (no fifth-table-style sprawl); it is a *client-supplied assertion* that the call is safe to retry. The actual dedup is enforced by the UNIQUE index on the semantic key. If a caller passes an `idempotency_key` but the semantic key differs from a prior write, a new row IS written (the key is advisory, the index is authoritative). This is documented behaviour, not a contradiction.
 
-### 15.7 v1.1 NFRs (deltas from §4)
+### 15.7 `set_usage(...)` — run-level cost / usage writer
 
-**NFR-MIG-1 (MUST).** The `user_version` 1→2 migration MUST complete in ≤ **500 ms** for a database with ≤ 100k score rows on reference hardware (the duplicate pre-check in DATA-MIG-6 is the dominant cost — it is a single indexed `GROUP BY ... HAVING COUNT(*)>1` scan).
+**Context.** `runs.dollar_cost`, `runs.tokens_in`, `runs.tokens_out` exist in the v1.0 DDL (§7.1) but **no supported path writes them on the online run**: `finalize_run` / `_FINALIZE_RUN` (`storage_sqlite.py`) `SET`s only status/timestamps/model/version fields, and `RunHandle` has no usage setter (`set_models` is the only late-bind method). Aggregations that `SUM(dollar_cost)` (`run stats`, HTTP `/stats`) therefore sum a column the online path leaves `NULL`. This feature closes that gap. **No schema change** — the columns already exist. See [`../1_product_and_research/atlas-unblock-v1.1-scope.md`](../1_product_and_research/atlas-unblock-v1.1-scope.md) "Delta 1 (P1-a)".
+
+**FR-USAGE-1 (MUST).** `RunHandle` gains a method (this is the second new handle method of v1.1, alongside `add_example`; the FR-API-4 renegotiation in §15.2 covers the surface-gate change):
+
+```python
+def set_usage(
+    self,
+    *,
+    tokens_in: int | None = None,
+    tokens_out: int | None = None,
+    dollar_cost: float | None = None,
+) -> None:
+    """Late-bind run-level usage totals; last non-None value per field wins.
+    No-op after abort()."""
+```
+
+**FR-USAGE-2 (MUST).** The three fields buffer onto `_RunBuilder` (mirroring `set_models`) and are threaded through `finalize_run(...)` into the `_FINALIZE_RUN` UPDATE `SET` list, so a closed run's `runs` row carries them. `write_run` (the offline path) already persists them via `_run_to_row`; only the online finalize path is extended.
+
+**FR-USAGE-3 (MUST — decision D-a1, resolved).** Usage is **caller-supplied via `set_usage`, not auto-derived**. `dollar_cost` has no other source (there is no per-span cost column), and an explicit setter matches how agentic backends report a single authoritative total (e.g. `claude -p --output-format json` → `total_cost_usd`). plumb stays a recorder, not a calculator. plumb MAY additionally auto-fill `runs.tokens_in`/`tokens_out` by summing spans at finalize **only when** `set_usage` did not supply them; it MUST NOT auto-derive `dollar_cost`. If `set_usage` is never called and no auto-fill applies, the columns stay `NULL` — never a fabricated value.
+
+**FR-USAGE-4 (MUST — decision D-a2, resolved).** On a resumed run (§15.1), `set_usage` is **last-wins overwrite** (same semantics as `set_models`), not accumulation — accumulation invites cross-process double-counting. Documented, not enforced.
+
+**FR-USAGE-5 (MUST).** Reliability parity: `set_usage` is a no-op after `abort()`; a storage failure on the usage write fail-degrades and never raises into the caller (NFR-Rel-1).
+
+### 15.8 `spans.attributes` — structured per-span JSON column
+
+**Context.** A span persists only `kind`, `name`, `input_hash`, `output_hash`, `tokens`, `latency_ms`, `status`, `error_type`. Consumers routinely compute structured per-span metadata at instrumentation time (ingestion counters; orchestrator worker metadata such as ticket id / attempt / failure-mode / lane / engine; per-stage workflow context) with no durable home except smuggling it into `task_id` prefixes or content-hash blobs. Recorded as a proposal in `deferred-features.md` (2026-06-07); **included in v1.1** because it must ride this `user_version` 1→2 migration or pay a second `SCHEMA_VERSION` bump later. Full rationale + the minimal-surface tension: [`../1_product_and_research/atlas-unblock-v1.1-scope.md`](../1_product_and_research/atlas-unblock-v1.1-scope.md) "Delta 2 (P1-b)".
+
+> **Surface-thesis note.** A free-form JSON bag pushes on plumb's minimal-surface thesis. Mitigations: it is a **column, not a fifth table** (four-table thesis intact); plumb **does not interpret the keys** (opaque store/return — no metric logic reads it, so it cannot corrupt scoring); three independent consumers want the same generic field (the right abstraction vs. N named columns). The proposal is flagged in the backlog as **needing sign-off** — if a falsifier check is wanted, run `pressure-test` on it **before** the migration is cut, since a "no" removes this `ALTER` from §15.3.
+
+**FR-ATTR-1 (MUST).** The `spans` table gains a nullable `attributes TEXT` column holding a JSON object (§15.3 `ALTER`). Scope is **`spans` only** for v1.1 (decision D-b3) — a `runs.attributes` is a separate future call, out of scope here.
+
+**FR-ATTR-2 (MUST).** `add_span` gains an optional `attributes: dict | None = None` parameter; `Span` gains `attributes: dict | None = None`. On write, `_span_to_row` serializes via `json.dumps`; on read, `_row_to_span` deserializes via `json.loads` to a `dict | None`. A round-trip of `attributes={...}` MUST return an equal dict. plumb does not interpret or index the keys.
+
+**FR-ATTR-3 (MUST — decision D-b1).** Validation is **fail-closed on write**: a non-JSON-serializable `attributes` value raises `ValidationError` at the API boundary and writes no span row. Reads MUST **never** raise on a malformed/legacy value (NFR-Rel-1) — a legacy or unparseable value surfaces as `None`.
+
+**FR-ATTR-4 (SHOULD — decision D-b2).** A documented soft size cap (≈ 8 KB serialized) is enforced at the API boundary to keep `attributes` metadata rather than a blob-smuggle channel; over-cap raises `ValidationError` on write.
+
+**FR-ATTR-5 (MUST).** Pre-migration span rows have `attributes = NULL` after the `ALTER`; this is correct and MUST NOT be backfilled or fabricated.
+
+### 15.9 v1.1 NFRs (deltas from §4)
+
+**NFR-MIG-1 (MUST).** The `user_version` 1→2 migration MUST complete in ≤ **500 ms** for a database with ≤ 100k score rows on reference hardware (the duplicate pre-check in DATA-MIG-6 is the dominant cost — it is a single indexed `GROUP BY ... HAVING COUNT(*)>1` scan). The added `spans.attributes` column (§15.8) does not change this budget — a bare `ALTER TABLE ... ADD COLUMN` is O(1) metadata in SQLite (no table rewrite).
+
+**NFR-USAGE-1 (MUST).** `set_usage` (§15.7) adds no hot-path cost: it mutates the in-memory `_RunBuilder` and contributes three bound parameters to the existing single-transaction finalize UPDATE — the NFR-Perf-2 run-close budget (≤ 50 ms for ≤ 100 spans) is unaffected.
 
 **NFR-MIG-2 (MUST).** Migration runs **once**, inside the existing connection bootstrap (`_bootstrap_schema`), before any user query. It adds zero hot-path cost after the one-time run (NFR-Perf-1/2 unaffected).
 
@@ -940,7 +994,7 @@ r.add_example(
 
 **NFR-RESUME-2 (MUST).** All v1.0 NFR-Sec / NFR-Rel guarantees hold unchanged for `resume_run` and `add_example`: parameterized SQL (NFR-Sec-3), no secrets in logs (NFR-Sec-2), fail-degraded-not-raise on plumb's own internal error (NFR-Rel-1).
 
-### 15.8 v1.1 acceptance criteria
+### 15.10 v1.1 acceptance criteria
 
 **AC-RESUME-1** (→ FR-RESUME-1/2/3).
 *Given* a run R opened and closed-by-handoff in process A with 3 spans, *When* process B calls `with plumb.resume_run(R.run_id) as r:` and adds 2 spans, *Then* exactly one `runs` row exists for R with 5 spans total, R's original `start_ts` is unchanged, and `end_ts` reflects the process-B exit time.
@@ -983,6 +1037,21 @@ r.add_example(
 
 **AC-IDEM-2** (→ FR-IDEM-3).
 *Given* a judge fail-open row with `scorer_version="anthropic:claude-sonnet-4-6:abc:error"`, *When* a successful re-score writes `scorer_version="anthropic:claude-sonnet-4-6:abc"` for the same `(run_id, metric_name)`, *Then* both rows coexist (distinct keys; the error does not block the re-score).
+
+**AC-USAGE-1** (→ FR-USAGE-1/2).
+*Given* an open run R, *When* `r.set_usage(tokens_in=100, tokens_out=250, dollar_cost=0.0123)` is called and the block exits, *Then* R's `runs` row has `tokens_in=100`, `tokens_out=250`, `dollar_cost=0.0123`, and `plumb run stats`' `dollar_cost_total` includes `0.0123`.
+
+**AC-USAGE-2** (→ FR-USAGE-3).
+*Given* a run where `set_usage` is never called and no span-sum auto-fill applies, *When* the run closes, *Then* `runs.dollar_cost` is `NULL` (never fabricated); `tokens_in`/`tokens_out` are `NULL` unless auto-filled from spans per FR-USAGE-3.
+
+**AC-ATTR-1** (→ FR-ATTR-2).
+*Given* a v1.1 database, *When* a span is written with `attributes={"lane":"planned","engine":"codex","attempt_n":2}` and re-read, *Then* `Span.attributes` equals that dict, and `SELECT json_extract(attributes,'$.engine') …` returns `"codex"`.
+
+**AC-ATTR-2** (→ FR-ATTR-5 legacy).
+*Given* a span row written by v1.0 (`attributes` NULL after migration), *When* it is re-read by v1.1, *Then* `Span.attributes is None` and no read error occurs.
+
+**AC-ATTR-3** (→ FR-ATTR-3 fail-closed).
+*Given* an open run, *When* `r.add_span(..., attributes=<non-JSON-serializable>)` is called, *Then* it raises `ValidationError` and no `spans` row is written.
 
 ---
 
