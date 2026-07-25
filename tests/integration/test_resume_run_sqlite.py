@@ -95,9 +95,8 @@ def test_resume_nonexistent_run_raises_not_found(
     monkeypatch.setattr(_api, "_storage", adapter)
     monkeypatch.setattr(_api, "_storage_writer", adapter)
 
-    with pytest.raises(NotFoundError):
-        with _api.resume_run("z" * 32):
-            pass
+    with pytest.raises(NotFoundError), _api.resume_run("z" * 32):
+        pass
 
     adapter.close()
 
@@ -115,8 +114,7 @@ def test_resume_terminal_run_raises_validation_error(
         pass  # finalizes to 'success' — a real completed run
 
     run_id = adapter.list_runs(limit=1)[0].run_id
-    with pytest.raises(ValidationError, match="already terminal"):
-        with _api.resume_run(run_id):
-            pass
+    with pytest.raises(ValidationError, match="already terminal"), _api.resume_run(run_id):
+        pass
 
     adapter.close()

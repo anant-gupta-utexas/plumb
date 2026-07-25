@@ -203,7 +203,9 @@ class TestAddScore:
         h.add_score("quality", "human", value_label="good")
         assert h._builder.scores[0][0].value_label == "good"
 
-    def test_idempotency_key_buffered_alongside_score(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_idempotency_key_buffered_alongside_score(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import plumb.api as _api
         from tests.conftest import FakeClock, FakeIdGenerator
 

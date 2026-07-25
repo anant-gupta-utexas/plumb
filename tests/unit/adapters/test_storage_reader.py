@@ -812,7 +812,8 @@ def test_span_attributes_malformed_json_reads_back_as_none(tmp_path: Path) -> No
         run = _make_run()
         adapter.write_run(run, [])
         adapter._conn.execute(
-            "INSERT INTO spans (span_id, run_id, kind, name, attributes) VALUES (?, ?, 'llm', 'gen', ?)",
+            "INSERT INTO spans (span_id, run_id, kind, name, attributes) "
+            "VALUES (?, ?, 'llm', 'gen', ?)",
             ("1" * 32, run.run_id, "{not valid json"),
         )
         results = adapter.get_spans_for_run(run.run_id)

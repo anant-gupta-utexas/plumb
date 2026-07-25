@@ -226,7 +226,7 @@ def _row_to_run(row: sqlite3.Row) -> Run:
     )
 
 
-def _attributes_from_row(row: sqlite3.Row) -> dict | None:
+def _attributes_from_row(row: sqlite3.Row) -> dict[str, Any] | None:
     """Deserialize the `attributes` column — never raise on read (NFR-Rel-1).
 
     A malformed/legacy (non-JSON, or JSON-but-not-a-dict) value surfaces as
@@ -433,7 +433,8 @@ class SQLiteStorageAdapter:
         """
         dupes = self._conn.execute(
             """
-            SELECT run_id, metric_name, scorer_version, IFNULL(span_id, '') AS span_key, COUNT(*) AS n
+            SELECT run_id, metric_name, scorer_version,
+                   IFNULL(span_id, '') AS span_key, COUNT(*) AS n
             FROM scores
             GROUP BY run_id, metric_name, scorer_version, span_key
             HAVING COUNT(*) > 1

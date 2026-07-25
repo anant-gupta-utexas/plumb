@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from plumb.core.errors import ValidationError
 
@@ -142,7 +143,7 @@ class Span:
     tokens_out: int | None = None
     error_type: str | None = None
     started_at: datetime | None = None
-    attributes: dict | None = None
+    attributes: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         _require_hex32(self.span_id, "span_id")

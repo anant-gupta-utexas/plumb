@@ -211,9 +211,7 @@ class TestSpansAndScoresWritten:
         storage = configured_api  # type: ignore[assignment]
         assert isinstance(storage, FakeStorageWriter)
         with run(task_id="t") as r:
-            r.add_score(
-                "accuracy", "deterministic", value_numeric=0.9, idempotency_key="my-key"
-            )
+            r.add_score("accuracy", "deterministic", value_numeric=0.9, idempotency_key="my-key")
         # FakeStorageWriter.write_score accepts and discards idempotency_key;
         # a TypeError here would mean the kwarg failed to thread through finalize.
         assert len(storage.scores) == 1

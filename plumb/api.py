@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 _ATTRIBUTES_MAX_BYTES = 8 * 1024  # ~8KB soft cap (FR-ATTR-4)
 
 
-def _validate_attributes(attributes: dict | None) -> None:
+def _validate_attributes(attributes: dict[str, Any] | None) -> None:
     """Fail-closed at the API boundary (FR-ATTR-3/4): non-serializable or
     oversized payloads raise ValidationError before any span is buffered."""
     if attributes is None:
@@ -46,7 +46,10 @@ def _validate_attributes(attributes: dict | None) -> None:
     except (TypeError, ValueError) as exc:
         raise ValidationError(f"attributes must be JSON-serializable: {exc}") from exc
     if len(encoded.encode("utf-8")) > _ATTRIBUTES_MAX_BYTES:
-        raise ValidationError(f"attributes payload exceeds the {_ATTRIBUTES_MAX_BYTES}-byte soft cap")
+        raise ValidationError(
+            f"attributes payload exceeds the {_ATTRIBUTES_MAX_BYTES}-byte soft cap"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Module-level singletons (DI pattern — tests monkeypatch these)
@@ -302,7 +305,7 @@ class RunHandle:
         latency_ms: float | None = None,
         status: SpanStatus | str | None = None,
         error_type: str | None = None,
-        attributes: dict | None = None,
+        attributes: dict[str, Any] | None = None,
     ) -> str:
         """Buffer a span; returns span_id. No-op after abort().
 
@@ -653,7 +656,7 @@ class _RunFactory:
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: Any,
-    ) -> bool:
+    ) -> Literal[False]:
         if self._deduped:
             return False  # outer no-op; never suppresses
 
@@ -681,7 +684,7 @@ class _RunFactory:
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: Any,
-    ) -> bool:
+    ) -> Literal[False]:
         return self.__exit__(exc_type, exc_val, exc_tb)
 
     # -- decorator path -------------------------------------------------------
@@ -787,7 +790,7 @@ class _ResumeRunFactory:
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: Any,
-    ) -> bool:
+    ) -> Literal[False]:
         handle = self._handle
         if handle is None:
             return False
@@ -810,7 +813,7 @@ class _ResumeRunFactory:
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: Any,
-    ) -> bool:
+    ) -> Literal[False]:
         return self.__exit__(exc_type, exc_val, exc_tb)
 
 

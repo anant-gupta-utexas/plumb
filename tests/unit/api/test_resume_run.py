@@ -35,7 +35,12 @@ class TestResumeRunBasic:
         with run(task_id="my-task") as r1:
             run_id = r1.run_id
 
-        storage._pending[run_id] = ("my-task", storage.runs[0][0].kind, None, storage.runs[0][0].start_ts)
+        storage._pending[run_id] = (
+            "my-task",
+            storage.runs[0][0].kind,
+            None,
+            storage.runs[0][0].start_ts,
+        )
 
         with resume_run(run_id) as r2:
             assert r2.run_id == run_id
@@ -62,17 +67,15 @@ class TestResumeRunBasic:
         assert len(newest_spans) == 1
 
     def test_resume_nonexistent_run_raises_not_found(self, configured_api: object) -> None:
-        with pytest.raises(NotFoundError):
-            with resume_run("z" * 32):
-                pass
+        with pytest.raises(NotFoundError), resume_run("z" * 32):
+            pass
 
     def test_resume_terminal_run_raises_validation_error(self, configured_api: object) -> None:
         with run(task_id="t") as r1:
             run_id = r1.run_id
         # run() finalizes to 'success' at __exit__ — already terminal.
-        with pytest.raises(ValidationError, match="already terminal"):
-            with resume_run(run_id):
-                pass
+        with pytest.raises(ValidationError, match="already terminal"), resume_run(run_id):
+            pass
 
     def test_resume_terminal_run_writes_no_new_rows(self, configured_api: object) -> None:
         from tests.conftest import FakeStorageWriter
@@ -84,9 +87,8 @@ class TestResumeRunBasic:
             run_id = r1.run_id
         count_before = len(storage.runs)
 
-        with pytest.raises(ValidationError):
-            with resume_run(run_id):
-                pass
+        with pytest.raises(ValidationError), resume_run(run_id):
+            pass
 
         assert len(storage.runs) == count_before
 

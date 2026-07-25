@@ -83,7 +83,8 @@ def _insert_score(
     conn.execute(
         """
         INSERT INTO scores
-            (score_id, run_id, span_id, metric_name, scorer, scorer_version, value_numeric, scored_at)
+            (score_id, run_id, span_id, metric_name, scorer,
+             scorer_version, value_numeric, scored_at)
         VALUES (?, ?, ?, ?, 'deterministic', ?, 1.0, ?)
         """,
         (score_id, run_id, span_id, metric_name, scorer_version, _NOW.isoformat()),
@@ -197,7 +198,9 @@ def test_migration_aborts_on_duplicate_scores(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_migration_failure_rolls_back_atomically(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_migration_failure_rolls_back_atomically(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     db = tmp_path / "v1.db"
     _make_v1_db(db)
     _insert_run(db, "a" * 32)
@@ -257,7 +260,8 @@ def test_migration_performance_100k_scores(tmp_path: Path) -> None:
     conn.executemany(
         """
         INSERT INTO scores
-            (score_id, run_id, span_id, metric_name, scorer, scorer_version, value_numeric, scored_at)
+            (score_id, run_id, span_id, metric_name, scorer,
+             scorer_version, value_numeric, scored_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         rows,
