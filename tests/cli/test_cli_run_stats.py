@@ -166,3 +166,28 @@ def test_run_stats_invalid_format(db_path) -> None:
     result = _invoke(db_path, "--format", "xml")
     assert result.exit_code == 1
     assert "table, json, or csv" in result.output
+
+
+def test_run_stats_no_cost_column_in_output(storage, db_path) -> None:
+    """FR-STATS-1 scope note (Task 11): plumb run stats output is unchanged
+    by the dollar_cost_run_count addition — no cost column added here.
+    Deliberate negative test to prevent scope creep in a future edit."""
+    run = make_run(1)
+    storage.write_run(run, [make_span(1, run.run_id)])
+    storage.close()
+
+    result = _invoke(db_path, "--format", "json")
+    assert result.exit_code == 0
+    obj = json.loads(result.output.strip().splitlines()[0])
+    assert "dollar_cost" not in obj
+    assert "dollar_cost_run_count" not in obj
+    assert set(obj.keys()) == {
+        "run_id",
+        "task_id",
+        "kind",
+        "status",
+        "start_ts",
+        "duration_ms",
+        "span_count",
+        "score_count",
+    }

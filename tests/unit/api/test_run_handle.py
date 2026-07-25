@@ -325,6 +325,44 @@ class TestAddExample:
         assert len(fake_storage.examples) == 0
 
 
+class TestSetUsage:
+    def test_all_fields_buffered(self) -> None:
+        h = _make_handle()
+        h.set_usage(tokens_in=100, tokens_out=250, dollar_cost=0.0123)
+        assert h._builder.usage_tokens_in == 100
+        assert h._builder.usage_tokens_out == 250
+        assert h._builder.usage_dollar_cost == 0.0123
+
+    def test_last_call_wins_per_field(self) -> None:
+        h = _make_handle()
+        h.set_usage(tokens_in=10, dollar_cost=1.0)
+        h.set_usage(tokens_in=20)
+        assert h._builder.usage_tokens_in == 20
+        assert h._builder.usage_dollar_cost == 1.0
+
+    def test_partial_call_does_not_clear_other_fields(self) -> None:
+        h = _make_handle()
+        h.set_usage(tokens_in=10, tokens_out=20, dollar_cost=1.0)
+        h.set_usage(tokens_out=99)
+        assert h._builder.usage_tokens_in == 10
+        assert h._builder.usage_tokens_out == 99
+        assert h._builder.usage_dollar_cost == 1.0
+
+    def test_defaults_none(self) -> None:
+        h = _make_handle()
+        assert h._builder.usage_tokens_in is None
+        assert h._builder.usage_tokens_out is None
+        assert h._builder.usage_dollar_cost is None
+
+    def test_noop_after_abort(self) -> None:
+        h = _make_handle()
+        h.abort("stop")
+        h.set_usage(tokens_in=10, tokens_out=20, dollar_cost=1.0)
+        assert h._builder.usage_tokens_in is None
+        assert h._builder.usage_tokens_out is None
+        assert h._builder.usage_dollar_cost is None
+
+
 class TestAbort:
     def test_sets_aborted_flag(self) -> None:
         h = _make_handle()

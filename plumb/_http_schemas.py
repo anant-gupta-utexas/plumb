@@ -251,6 +251,8 @@ class StatsOut(BaseModel):
         latency_ms_p50: 50th-percentile end-to-end latency in milliseconds.
         latency_ms_p95: 95th-percentile end-to-end latency in milliseconds.
         dollar_cost_total: Sum of ``dollar_cost`` across all matching runs.
+        dollar_cost_run_count: Count of matching runs with a non-NULL ``dollar_cost``
+            (FR-USAGE-6) — signals partial cost coverage when < run_count.
         tokens_in_total: Sum of ``tokens_in`` across all matching runs.
         tokens_out_total: Sum of ``tokens_out`` across all matching runs.
         tokens_per_resolved_task: Average tokens consumed per successful run.
@@ -267,6 +269,7 @@ class StatsOut(BaseModel):
     latency_ms_p50: float | None
     latency_ms_p95: float | None
     dollar_cost_total: float | None
+    dollar_cost_run_count: int
     tokens_in_total: int | None
     tokens_out_total: int | None
     tokens_per_resolved_task: float | None

@@ -1,6 +1,6 @@
 # Orchestrator Handoff Patterns
 
-Multi-process orchestrator systems often need to record a single logical job across several Python processes or sub-agents. plumb supports this through explicit `parent_run_id` threading (FR-GRAPH-2). This guide explains the three handoff shapes and when to use each.
+Multi-process orchestrator systems often need to record a single logical job across several Python processes or sub-agents. plumb supports this through explicit `parent_run_id` threading (FR-GRAPH-2) and, as of v1.1, through `resume_run` for same-run continuation. This guide explains the four handoff shapes and when to use each.
 
 ---
 
@@ -63,15 +63,36 @@ Use this when the two processes do not have a strict "started by" relationship o
 
 ---
 
-### Pattern 3 — Same-run continuation across processes (v2 roadmap)
+### Pattern 3 — Same-run continuation across processes (supported since v1.1)
 
 Atlas's `code_gen` flow needs to *continue* an existing run from a new process — appending spans to a run that was opened by the orchestrator, rather than forking a child. This is semantically different from Pattern 1: there is one `runs` row, and multiple processes contribute to it.
 
-**This pattern is not supported in v1.** The current `with run(...)` API always opens a new row (`INSERT` on enter, `UPDATE` on exit). Implementing continuation requires a `resume_run(run_id)` callable with different adapter semantics and would add a third public entry point — blocked by FR-API-1 in v1.
+`plumb.resume_run(run_id)` re-opens a run that a previous process left `pending` (i.e. it entered `with run(...)` but the process exited or handed off before the block closed). It is context-manager-only — there is no decorator form, since resuming requires an existing `run_id` that can't be bound at decoration time.
 
-**v2 plan:** add `plumb.resume_run(run_id)` (or `run(..., resume_run_id=...)`) once the API surface gate is renegotiated for the major version. See [deferred-features.md](../2_architecture/deferred-features.md).
+```python
+# orchestrator.py — opens the run, leaves it pending, hands run_id to a worker
+from plumb import run
 
-**v1 workaround:** use Pattern 1. The child run for `code_gen` appears linked to the orchestrator run via `parent_run_id` and is queryable together with it. Gate-review workflows can read both rows and their spans to reconstruct the full trajectory.
+r = run(task_id="atlas.code_gen").__enter__()  # entered, not yet exited
+run_id = r.run_id
+# ... signal run_id to the worker (queue, file, env var) and exit this process
+# without calling __exit__ — the row stays status='pending' in SQLite
+```
+
+```python
+# worker.py — resumes the same run in a different process
+from plumb import resume_run, SpanKind
+
+with resume_run(run_id) as r:
+    r.add_span(SpanKind.LLM, "generate")
+    r.set_usage(dollar_cost=0.004)
+# finalize_run fires on exit — original start_ts is preserved,
+# end_ts reflects this process's exit time
+```
+
+`resume_run` raises `NotFoundError` if `run_id` doesn't exist, and `ValidationError` if the run is already terminal (`success`/`failure`/`aborted`/`stalled`) — a `stalled` run has already been given up on by the 1-hour stalled-sweep, so resuming it would race that sweep rather than legitimately continue it.
+
+**When to use:** the orchestrator and the continuing process are contributing to the *same* logical execution, not two related-but-distinct ones. If the child has its own coherent start/end lifecycle, prefer Pattern 1 (`parent_run_id`) instead.
 
 ---
 
@@ -99,9 +120,9 @@ The `handoff_roundtrip` metric (PRD §4) reads these two hashes from the blob st
 
 ## Decision guide
 
-| Need | Pattern | Supported in v1 |
+| Need | Pattern | Supported since |
 |---|---|---|
-| Sub-agent has its own start/end lifecycle | Child run (`parent_run_id`) | Yes |
-| Two independent pipeline steps, same task | Sibling runs (same `task_id`) | Yes |
-| One logical run, multiple processes | Same-run continuation | No — v2 |
-| Post-hoc quality review of brief/summary | `kind='handoff'` span | Yes |
+| Sub-agent has its own start/end lifecycle | Child run (`parent_run_id`) | v1.0 |
+| Two independent pipeline steps, same task | Sibling runs (same `task_id`) | v1.0 |
+| One logical run, multiple processes | Same-run continuation (`resume_run`) | v1.1 |
+| Post-hoc quality review of brief/summary | `kind='handoff'` span | v1.0 |

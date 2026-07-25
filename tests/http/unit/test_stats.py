@@ -48,6 +48,7 @@ class _FakeRunAggregate:
         stalled_count: int = 0,
         latency_ms_values: list[float] | None = None,
         dollar_cost_total: float | None = 1.5,
+        dollar_cost_run_count: int = 3,
         tokens_in_total: int | None = 1000,
         tokens_out_total: int | None = 500,
         successful_tokens_total: int | None = 600,
@@ -60,6 +61,7 @@ class _FakeRunAggregate:
         self.stalled_count = stalled_count
         self.latency_ms_values = latency_ms_values or [100.0, 200.0, 500.0]
         self.dollar_cost_total = dollar_cost_total
+        self.dollar_cost_run_count = dollar_cost_run_count
         self.tokens_in_total = tokens_in_total
         self.tokens_out_total = tokens_out_total
         self.successful_tokens_total = successful_tokens_total
@@ -195,6 +197,24 @@ def test_metrics_list_populated() -> None:
     routing = next(m for m in result.metrics if m.metric_name == "routing_top1")
     assert routing.n == 2
     assert routing.pass_rate == pytest.approx(0.5)
+
+
+def test_dollar_cost_run_count_populated() -> None:
+    """AC-USAGE-4: a task window with 20 runs, 12 with non-NULL dollar_cost
+    summing to 4.10 -> dollar_cost_total==4.10, dollar_cost_run_count==12,
+    run_count==20."""
+    agg = _FakeRunAggregate(
+        run_count=20,
+        success_count=18,
+        failure_count=2,
+        dollar_cost_total=4.10,
+        dollar_cost_run_count=12,
+    )
+    reader = _FakeReader(agg=agg)
+    result = compute_task_stats(reader, "test.task", None)
+    assert result.dollar_cost_total == pytest.approx(4.10)
+    assert result.dollar_cost_run_count == 12
+    assert result.run_count == 20
 
 
 def test_since_passed_through() -> None:

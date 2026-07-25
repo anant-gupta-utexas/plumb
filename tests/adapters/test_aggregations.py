@@ -118,6 +118,24 @@ class TestAggregateRunsForTask:
         assert result.tokens_out_total == 150
         assert abs(result.dollar_cost_total - 0.03) < 1e-9
 
+    def test_dollar_cost_run_count_mixed_coverage(self, adapter: SQLiteStorageAdapter) -> None:
+        """FR-USAGE-6: dollar_cost_run_count equals the count of non-NULL
+        dollar_cost runs in the window, independent of the total run_count."""
+        adapter.write_run(_run("a" * 32, dollar_cost=0.01), [])
+        adapter.write_run(_run("b" * 32, dollar_cost=0.02), [])
+        adapter.write_run(_run("c" * 32, dollar_cost=None), [])
+
+        result = adapter.aggregate_runs_for_task("task.a")
+        assert result.run_count == 3
+        assert result.dollar_cost_run_count == 2
+
+    def test_dollar_cost_run_count_zero_when_none_have_cost(
+        self, adapter: SQLiteStorageAdapter
+    ) -> None:
+        adapter.write_run(_run("a" * 32, dollar_cost=None), [])
+        result = adapter.aggregate_runs_for_task("task.a")
+        assert result.dollar_cost_run_count == 0
+
     def test_successful_tokens_only_success_status(self, adapter: SQLiteStorageAdapter) -> None:
         adapter.write_run(
             _run("a" * 32, status=RunStatus.SUCCESS, tokens_in=100, tokens_out=50), []

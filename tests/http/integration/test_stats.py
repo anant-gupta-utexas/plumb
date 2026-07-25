@@ -68,6 +68,39 @@ def stats_client(tmp_path, seeded_db) -> TestClient:  # type: ignore[no-untyped-
 
 
 @pytest.fixture
+def mixed_cost_coverage_client(tmp_path):  # type: ignore[no-untyped-def]
+    """AC-USAGE-4: 20 runs, 12 with non-NULL dollar_cost summing to 4.10."""
+    from pathlib import Path
+
+    class _FakeClock:
+        def now(self) -> datetime:
+            return datetime(2026, 1, 1, tzinfo=UTC)
+
+    db_path: Path = tmp_path / "plumb.db"
+    adapter = SQLiteStorageAdapter(db_path, clock=_FakeClock())
+
+    costed_costs = [round(4.10 / 12, 10)] * 11 + [
+        round(4.10 - round(4.10 / 12, 10) * 11, 10)
+    ]  # 12 values summing exactly to 4.10
+    for i in range(12):
+        adapter.write_run(
+            _make_run(f"{i:032x}", task_id="cost.task", dollar_cost=costed_costs[i]), []
+        )
+    for i in range(12, 20):
+        adapter.write_run(_make_run(f"{i:032x}", task_id="cost.task", dollar_cost=None), [])
+    adapter.close()
+
+    from plumb._http_deps import StoragePool
+    from plumb.http import app
+
+    pool = StoragePool(db_path, pool_size=1)
+    app.state.pool = pool
+    client = TestClient(app, raise_server_exceptions=False)
+    yield client
+    pool.close()
+
+
+@pytest.fixture
 def stats_only_client(tmp_path):  # type: ignore[no-untyped-def]
     """TestClient with a fresh DB containing only stats-relevant seed data."""
     from pathlib import Path
@@ -130,6 +163,7 @@ class TestGetTaskStats:
             "latency_ms_p50",
             "latency_ms_p95",
             "dollar_cost_total",
+            "dollar_cost_run_count",
             "tokens_in_total",
             "tokens_out_total",
             "tokens_per_resolved_task",
@@ -167,3 +201,15 @@ class TestGetTaskStats:
         assert quality is not None
         assert quality["n"] == 2
         assert quality["value_mean"] is not None
+
+    def test_dollar_cost_run_count_partial_coverage(
+        self, mixed_cost_coverage_client: TestClient
+    ) -> None:
+        """AC-USAGE-4: 20 runs, 12 with non-NULL dollar_cost summing to 4.10
+        -> dollar_cost_total==4.10, dollar_cost_run_count==12, run_count==20."""
+        resp = mixed_cost_coverage_client.get("/stats/task/cost.task")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["run_count"] == 20
+        assert body["dollar_cost_run_count"] == 12
+        assert abs(body["dollar_cost_total"] - 4.10) < 1e-6

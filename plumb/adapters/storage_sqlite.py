@@ -47,6 +47,8 @@ class TaskRunAggregate:
         stalled_count: Runs with status ``stalled``.
         latency_ms_values: List of end-to-end latency values in ms (for percentile compute).
         dollar_cost_total: Sum of ``dollar_cost`` across all matching runs.
+        dollar_cost_run_count: Count of matching runs with a non-NULL ``dollar_cost``
+            (FR-USAGE-6) — signals partial cost coverage when < run_count.
         tokens_in_total: Sum of ``tokens_in`` across all matching runs.
         tokens_out_total: Sum of ``tokens_out`` across all matching runs.
         successful_tokens_total: Combined token total for successful runs only.
@@ -60,6 +62,7 @@ class TaskRunAggregate:
     stalled_count: int
     latency_ms_values: list[float]
     dollar_cost_total: float | None
+    dollar_cost_run_count: int
     tokens_in_total: int | None
     tokens_out_total: int | None
     successful_tokens_total: int | None
@@ -855,6 +858,7 @@ class SQLiteStorageAdapter:
                 SUM(CASE WHEN status = 'aborted' THEN 1 ELSE 0 END) AS aborted_count,
                 SUM(CASE WHEN status = 'stalled' THEN 1 ELSE 0 END) AS stalled_count,
                 SUM(dollar_cost)                                AS dollar_cost_total,
+                COUNT(dollar_cost)                              AS dollar_cost_run_count,
                 SUM(tokens_in)                                  AS tokens_in_total,
                 SUM(tokens_out)                                 AS tokens_out_total,
                 SUM(
@@ -896,6 +900,7 @@ class SQLiteStorageAdapter:
             stalled_count=row["stalled_count"] or 0,
             latency_ms_values=latency_values,
             dollar_cost_total=row["dollar_cost_total"],
+            dollar_cost_run_count=row["dollar_cost_run_count"] or 0,
             tokens_in_total=row["tokens_in_total"],
             tokens_out_total=row["tokens_out_total"],
             successful_tokens_total=successful_tokens,
