@@ -236,6 +236,7 @@ def test_stats_out_has_separate_tokens() -> None:
         latency_ms_p50=None,
         latency_ms_p95=None,
         dollar_cost_total=None,
+        dollar_cost_run_count=0,
         tokens_in_total=100,
         tokens_out_total=50,
         tokens_per_resolved_task=None,
@@ -243,6 +244,47 @@ def test_stats_out_has_separate_tokens() -> None:
     )
     assert s.tokens_in_total == 100
     assert s.tokens_out_total == 50
+
+
+def test_stats_out_dollar_cost_run_count_field() -> None:
+    s = StatsOut(
+        task_id="t",
+        since=None,
+        run_count=20,
+        success_rate=1.0,
+        intervention_rate=None,
+        latency_ms_p50=None,
+        latency_ms_p95=None,
+        dollar_cost_total=4.10,
+        dollar_cost_run_count=12,
+        tokens_in_total=None,
+        tokens_out_total=None,
+        tokens_per_resolved_task=None,
+        metrics=[],
+    )
+    assert s.dollar_cost_run_count == 12
+
+
+def test_stats_out_extra_forbidden() -> None:
+    """Regression-guard: StatsOut still rejects unexpected extra fields —
+    adding dollar_cost_run_count must not loosen extra='forbid'."""
+    with pytest.raises(ValidationError):
+        StatsOut(
+            task_id="t",
+            since=None,
+            run_count=1,
+            success_rate=1.0,
+            intervention_rate=None,
+            latency_ms_p50=None,
+            latency_ms_p95=None,
+            dollar_cost_total=None,
+            dollar_cost_run_count=0,
+            tokens_in_total=None,
+            tokens_out_total=None,
+            tokens_per_resolved_task=None,
+            metrics=[],
+            unexpected_field=True,  # type: ignore[call-arg]
+        )
 
 
 def test_metric_stat_out_extra_forbidden() -> None:

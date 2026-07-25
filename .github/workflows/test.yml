@@ -59,4 +59,4 @@ jobs:
       - name: Smoke — plumb --help and version
         run: |
           uv run plumb --help
-          uv run plumb version | grep "plumb 0\."
+          uv run plumb version | grep -E "^plumb [0-9]+\.[0-9]+\.[0-9]+"

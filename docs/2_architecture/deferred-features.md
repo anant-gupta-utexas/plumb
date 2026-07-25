@@ -19,6 +19,8 @@
 > **Adding entries.** Append a new section at the bottom of the relevant group. Never silently remove or edit historical entries — supersede with a new dated entry and update the old one's Decision line (e.g., `~~deferred to v1.1~~ → shipped in v1.2, see entry dated 2026-08-01`).
 >
 > **Scheduling note (2026-06-01).** The PRD §10 Release Plan now schedules many of these entries into concrete releases (v1.1 / v1.2 / v2.0). The PRD is the authority for *what ships when*; this file remains the authority for *why each option was picked*. Entries scheduled into a release have their Decision line annotated with `→ scheduled PRD §10 vX.Y`. Note some entries dated as "v1.1" here were renumbered to v1.2 in the PRD (dependency ordering); the annotation reflects the PRD-authoritative release.
+>
+> **Migration-lock sweep (2026-07-24).** This backlog was swept against the v1.1 `user_version` 1→2 migration to catch anything schema-bearing that must ride it or wait a full release. **Outcome: nothing further needs to be added** — the §15.3 `ALTER` list is complete. Two entries were evaluated and deliberately excluded (WAL/SHM permissions; `run stats` child-run display), both because they are schema-free and therefore carry no deadline pressure. The reasoning, plus a table of every entry checked, is in [`TRD-v2.md`](TRD-v2.md) "Backlog sweep". One open scheduling flag for the PRD owner: **WAL/SHM file permissions is unscheduled** and will keep resurfacing until it lands in v1.2 or a v1.0.2 patch.
 
 ---
 
@@ -237,6 +239,18 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 - **Rationale for current pick:** PRD §7 picked after-the-fact eval explicitly. Instrumentation that can block production is a different product.
 - **Revisit trigger:** PRD revision (would be a v3-level philosophy change).
 
+### Not doing — ever — Deriving `dollar_cost` from tokens (model price table)
+
+- **Decision:** **permanent non-goal.** Not v1, not v1.1, not v2. Specified as TRD §15.7 FR-USAGE-3a.
+- **Date:** 2026-07-24
+- **Context:** Backends report cost **heterogeneously**. Verified: Claude's CLI emits `total_cost_usd`; **Codex CLI `0.144.4` emits no cost field at all** — only `usage: {input_tokens, cached_input_tokens, output_tokens, reasoning_output_tokens}`. So `runs.dollar_cost` is structurally unpopulated for some backends. The tempting "fix" is for plumb to multiply tokens by a per-model price and fill the gap. This entry exists to make sure a future session reads that as **settled, not open**.
+- **Options considered:**
+  - *Ship/embed/fetch a model price table and compute `dollar_cost` from tokens* — Pro: no NULLs; every run gets a cost figure. Con: prices change without notice, so the table goes stale silently and emits **confidently wrong** numbers. For a measurement framework that is the worst output class — strictly worse than `NULL`, because `NULL` is honestly unknown while a stale computed figure is dishonestly precise. It also drags model identity, provider, cache-tier pricing, and effective-date tracking into what is supposed to be a recorder, and creates a maintenance surface with no bounded owner.
+  - **Record only what callers supply; represent absence as `NULL` and report coverage (chosen)** — plumb stays a recorder. Partial coverage is surfaced explicitly via `dollar_cost_run_count` (FR-USAGE-6 / FR-STATS-1) so a subset sum can never present as a complete total.
+- **Rationale for current pick:** Continuous with §6.3 (plumb does not interpret agentic-CLI internals) and PRD §7 (plumb records, it does not model). The honest answer to "what did this cost?" when the backend never said is "unknown for N of M runs" — not a guess dressed as a measurement. Consumer (atlas v3) independently reached the same position and is tokens-only by decision.
+- **The boundary, precisely:** plumb MAY **sum** caller-supplied `dollar_cost` values — aggregating recorded facts is recording. plumb MUST NOT **multiply** tokens by an assumed rate. The line is whether plumb introduces a number no caller ever gave it.
+- **Revisit trigger:** **None.** This is a philosophy-level commitment, not a capacity deferral. Reopening it is a PRD-level change requiring an explicit thesis revision — not a "helpful improvement" a future session can slip in.
+
 ### Not doing (v1) — Fifth SQL table
 
 - **Decision:** not doing in v1 (PRD Tier-1 gating)
@@ -437,8 +451,10 @@ Entries below are features the PRD explicitly defers. They're recorded here so f
 
 ### v1.1 — `spans.attributes` structured-data column (OTel-style span attributes)
 
-- **Decision:** deferred to v1.1 (proposed — fold onto the existing `user_version` 1→2 migration)
-- **Date:** 2026-06-07
+- **Decision:** **ACCEPTED for v1.1** (2026-07-24) — folded onto the existing `user_version` 1→2 migration. Sign-off condition below is met; specified as TRD §15.8.
+- **Date:** 2026-06-07 (proposed) → 2026-07-24 (accepted)
+- **Sign-off (2026-07-24):** The "needs sign-off / revisit before the migration is cut" condition is **discharged**. The falsifier check came back *supporting* inclusion: verified agentic-CLI backends report four-field usage shapes (Claude: `input`/`output`/`cache_creation`/`cache_read`; Codex CLI `0.144.4`: `input_tokens`/`cached_input_tokens`/`output_tokens`/`reasoning_output_tokens`) that **do not fit** the §15.5 two-column `tokens_in`/`tokens_out` split without loss, and have no other durable home. `attributes` is therefore load-bearing for *fidelity*, not just analytics — without it v1.1 would ship a token model that silently drops cache-tier and reasoning breakdown. The named-column alternative would add ≥4 `spans` columns that are NULL for every other backend and grow per backend. See TRD §15.8 FR-ATTR-6.
+- **Known trade accepted:** aggregation over `attributes` via `json_extract` is unindexed/slower than a typed column; plumb does not promise indexed aggregation over it in v1.1. Promotion to a typed column is a later-release migration if a consumer needs it.
 - **Context:** Today a span persists only `kind`, `name`, `input_hash`, `output_hash`, `tokens`, `latency_ms`, `status`, `error_type`. Callers routinely compute structured per-span counters at instrumentation time — e.g. an ingestion span that knows `items_fetched`, `items_new`, `items_skipped`, or an orchestrator worker span that knows `ticket_id`, `attempt_n`, `failure_mode`, `blocked_by`. There is no durable home for that data. The only escape hatch is to serialize it into `input_hash`/`output_hash` blob content (abusing a content-address field for structured metadata) or to smuggle it into the `task_id` string prefix. Both are workarounds that make the data unqueryable as first-class columns and muddy the metric/namespacing layer.
 - **Options considered:**
   - *Status quo — blob/`task_id` smuggling* — Pro: no schema change. Con: structured per-span data is not queryable; `task_id`-prefix parsing is brittle; `input_hash` is a content-address, not a metadata bag.

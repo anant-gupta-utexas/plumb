@@ -47,7 +47,7 @@ def test_fresh_db_creates_tables(tmp_path: Path) -> None:
 def test_fresh_db_sets_user_version(tmp_path: Path) -> None:
     with SQLiteStorageAdapter(tmp_path / "test.db", clock=_clock()) as adapter:
         version = adapter._conn.execute("PRAGMA user_version").fetchone()[0]
-        assert version == 1
+        assert version == 2
 
 
 def test_reinit_existing_db_is_noop(tmp_path: Path) -> None:

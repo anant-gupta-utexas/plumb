@@ -2,7 +2,7 @@
 
 > A measurement spine for orchestrator + sub-agent systems.
 
-[![Tests](https://img.shields.io/badge/tests-568%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-906%20passing-brightgreen)](tests/)
 [![Python](https://img.shields.io/badge/python-3.13%2B-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -27,12 +27,12 @@ plumb is that reference implementation.
 ## What you get
 
 - **Four-table SQLite schema** — `runs`, `spans`, `scores`, `examples`. If a signal can't be expressed in these four tables, it isn't v1.
-- **Two entry points** — decorator and context manager. No class hierarchy, no plugin system, no third entry point.
+- **Three entry points, no framework** — decorator, context manager, and `resume_run` for cross-process hand-off. No class hierarchy, no plugin system.
 - **`plumb` CLI** — `run stats`, `score write`, `example promote`, `judge run`, `serve`, `attach`, `version`.
 - **Judge adapters** — Anthropic native + OpenAI-compatible (OpenRouter / Ollama / vLLM / LM Studio / LiteLLM).
 - **agentsview ATTACH** — backfill from `~/.agentsview/db.sqlite` with ~200 lines of adapter, no ETL, no nightly job.
 - **Ten v1 metrics** — task completion, latency, cost, tokens-per-resolved-task, tool-call validity, tool-argument hallucination, routing top-1, handoff round-trip, intervention rate, pass^3.
-- **568 tests, ruff-clean, mypy strict on core.**
+- **906 tests, ruff-clean, mypy strict on core.**
 
 ---
 
@@ -62,7 +62,10 @@ from plumb import run
 
 with run(task_id="atlas.stage5.codegen", kind="online") as r:
     r.add_score("verify_pass", scorer="deterministic", value_label="pass")
+    r.set_usage(dollar_cost=0.0031)
 ```
+
+`resume_run(run_id)` re-opens a `pending` run from a different process (context-manager only); `r.add_example(...)` writes an `examples` row from inside an active run. Full detail: [core_concepts.md](docs/3_guides/core_concepts.md).
 
 **CLI**
 
@@ -75,6 +78,8 @@ plumb judge run --model claude-sonnet-4-6 --metric routing_top1
 
 ## Schema at a glance
 
+`user_version = 2` (v1.1 "Atlas unblock" migration — additive only, applied automatically on first open of a v1.0 database).
+
 ```
 runs       (run_id, kind ∈ {offline, online}, task_id, parent_run_id?,
             orchestrator_model, sub_agent_model, prompt_version,
@@ -82,18 +87,19 @@ runs       (run_id, kind ∈ {offline, online}, task_id, parent_run_id?,
 
 spans      (span_id, run_id, parent_span_id?,
             kind ∈ {llm, tool, subagent, handoff, plan, verify},
-            name, input_hash, output_hash, tokens, latency_ms, status, error_type)
+            name, input_hash, output_hash, tokens_in, tokens_out, attributes?,
+            latency_ms, status, error_type)
 
 scores     (score_id, run_id, span_id?,
             metric_name, scorer ∈ {deterministic, judge, human, user_signal},
-            scorer_version, value_numeric, value_label, scored_at)
+            scorer_version, value_numeric, value_label, rationale?, scored_at)
 
 examples   (example_id, task_id, inputs_hash, expected_output_hash,
             rubric, source ∈ {synthetic, production_promotion, human_authored},
             origin_run_id? → runs, active, created_at)
 ```
 
-`runs.kind` unifies offline evals and production traces in one table. `scores.scorer_version` lets you detect judge drift without corrupting history. `examples.origin_run_id` closes the offline ↔ online loop: a production failure remembers the trace it came from.
+`runs.kind` unifies offline evals and production traces in one table. `scores.scorer_version` lets you detect judge drift without corrupting history; `scores.rationale` carries the judge's free-text reasoning. `examples.origin_run_id` closes the offline ↔ online loop: a production failure remembers the trace it came from. Full column reference, migration contract, and pre-v1.1 read fallback behavior: [core_concepts.md](docs/3_guides/core_concepts.md).
 
 ## Project layout
 
@@ -135,7 +141,7 @@ Feature workflow (plan → build → archive) is in [CLAUDE.md](CLAUDE.md). Cont
 
 ## Used by
 
-**atlas** — the companion agent orchestrator — writes every pipeline run into plumb's four-table schema via the decorator + context manager surface.
+**atlas** — the companion agent orchestrator — writes every pipeline run into plumb's four-table schema via the decorator, context manager, and `resume_run` surface.
 
 ## License
 

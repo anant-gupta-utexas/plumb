@@ -164,6 +164,10 @@ _NUMERIC_HELP = "Numeric score value."
 _LABEL_HELP = "Label score value."
 _SPAN_ID_HELP = "Optional span to attach the score to."
 _SCORER_VER_HELP = "Scorer version string."
+_IDEMPOTENCY_KEY_HELP = (
+    "Advisory idempotency key (not persisted). The actual dedup guarantee is the "
+    "storage layer's unique key on (run_id, metric, scorer_version, span_id)."
+)
 
 
 @score_app.command("write")
@@ -178,6 +182,9 @@ def score_write(
     span_id: Annotated[str | None, typer.Option("--span-id", help=_SPAN_ID_HELP)] = None,
     scorer_version: Annotated[
         str | None, typer.Option("--scorer-version", help=_SCORER_VER_HELP)
+    ] = None,
+    idempotency_key: Annotated[
+        str | None, typer.Option("--idempotency-key", help=_IDEMPOTENCY_KEY_HELP)
     ] = None,
 ) -> None:
     """Write a score row for an existing run.
@@ -222,13 +229,16 @@ def score_write(
                 value_numeric=value_numeric,
                 value_label=value_label,
             )
-            storage.write_score(score)
+            inserted = storage.write_score(score, idempotency_key=idempotency_key)
     except typer.Exit:
         raise
     except Exception as exc:
         _die(str(exc))
 
-    typer.echo(f"Score {score_id[:8]} written for run {run_id[:8]}.")
+    if inserted:
+        typer.echo(f"Score {score_id[:8]} written for run {run_id[:8]}.")
+    else:
+        typer.echo(f"Score already exists for run {run_id[:8]} (no-op).")
 
 
 # ---------------------------------------------------------------------------

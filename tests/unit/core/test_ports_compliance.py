@@ -74,17 +74,28 @@ class FakeStorageWriter:
         prompt_version: str | None = None,
         tool_schema_version: str | None = None,
         git_sha: str | None = None,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
+        dollar_cost: float | None = None,
     ) -> None:
         pass
 
     def write_run(self, run: Run, spans: Sequence[Span]) -> None:
         self.runs.append((run, list(spans)))
 
-    def write_score(self, score: Score) -> None:
+    def write_score(self, score: Score, *, idempotency_key: str | None = None) -> bool:
+        del idempotency_key
         self.scores.append(score)
+        return True
 
     def write_example(self, example: Example) -> None:
         self.examples.append(example)
+
+    def open_or_resume(self, run_id: str) -> Run:
+        for run, _spans in self.runs:
+            if run.run_id == run_id:
+                return run
+        raise ValueError(f"run {run_id!r} not found")
 
 
 class FakeStorageReader:
@@ -212,6 +223,65 @@ def test_fake_id_generator_satisfies_id_generator_protocol() -> None:
 def test_fake_storage_writer_satisfies_storage_writer_protocol() -> None:
     fake = FakeStorageWriter()
     assert isinstance(fake, StorageWriter)
+
+
+def test_fake_storage_writer_finalize_run_accepts_usage_kwargs() -> None:
+    """isinstance() against a runtime_checkable Protocol only checks method
+    *names*, not signatures — a stale fake missing tokens_in/tokens_out/
+    dollar_cost would still pass the isinstance check above while breaking at
+    call time. This is the actual regression guard (Task 12)."""
+    import inspect
+
+    fake_params = set(inspect.signature(FakeStorageWriter.finalize_run).parameters)
+    real_params = set(inspect.signature(StorageWriter.finalize_run).parameters)
+    assert real_params <= fake_params
+
+
+def test_fake_storage_writer_write_score_accepts_idempotency_key() -> None:
+    import inspect
+
+    fake_params = set(inspect.signature(FakeStorageWriter.write_score).parameters)
+    real_params = set(inspect.signature(StorageWriter.write_score).parameters)
+    assert real_params <= fake_params
+
+
+def test_fake_storage_writer_has_open_or_resume() -> None:
+    assert hasattr(FakeStorageWriter, "open_or_resume")
+
+
+# ---------------------------------------------------------------------------
+# Task 12: sweep the real test double + the production no-op double, not just
+# this file's local FakeStorageWriter. isinstance() alone is insufficient
+# (Protocol structural checks ignore signatures) so this compares parameter
+# sets directly against the current StorageWriter Protocol methods.
+# ---------------------------------------------------------------------------
+
+
+def _assert_signature_superset(cls: type, method_name: str) -> None:
+    import inspect
+
+    real_params = set(inspect.signature(getattr(StorageWriter, method_name)).parameters)
+    impl_params = set(inspect.signature(getattr(cls, method_name)).parameters)
+    missing = real_params - impl_params
+    assert not missing, f"{cls.__name__}.{method_name} missing params: {missing}"
+
+
+def test_conftest_fake_storage_writer_matches_protocol() -> None:
+    from tests.conftest import FakeStorageWriter as RealFakeStorageWriter
+
+    assert isinstance(RealFakeStorageWriter(), StorageWriter)
+    for method in ("open_run", "finalize_run", "write_run", "write_score", "write_example"):
+        _assert_signature_superset(RealFakeStorageWriter, method)
+    assert hasattr(RealFakeStorageWriter, "open_or_resume")
+
+
+def test_noop_storage_writer_matches_protocol() -> None:
+    from plumb.api import _NoopStorageWriter
+
+    assert isinstance(_NoopStorageWriter(), StorageWriter)
+    for method in ("open_run", "finalize_run", "write_run", "write_score", "write_example"):
+        _assert_signature_superset(_NoopStorageWriter, method)
+    assert hasattr(_NoopStorageWriter, "open_or_resume")
 
 
 def test_fake_storage_reader_satisfies_storage_reader_protocol() -> None:

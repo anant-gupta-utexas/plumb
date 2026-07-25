@@ -90,7 +90,8 @@ def _normalize(sql: str) -> str:
 
 
 def test_schema_version() -> None:
-    assert SCHEMA_VERSION == 1
+    # v1.1 "Atlas unblock + schema v2" (TRD §15, DATA-MIG-3) bumped user_version 1 -> 2.
+    assert SCHEMA_VERSION == 2
 
 
 def test_ddl_statement_count() -> None:

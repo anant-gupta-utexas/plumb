@@ -54,13 +54,14 @@ def _score(
     scorer: ScorerKind = ScorerKind.JUDGE,
     value_numeric: float | None = 0.9,
     value_label: str | None = None,
+    scorer_version: str = "v1",
 ) -> Score:
     return Score(
         score_id=score_id,
         run_id=run_id,
         metric_name=metric_name,
         scorer=scorer,
-        scorer_version="v1",
+        scorer_version=scorer_version,
         scored_at=datetime(2026, 1, 1, 12, 0, 5, tzinfo=UTC),
         value_numeric=value_numeric,
         value_label=value_label,
@@ -117,6 +118,24 @@ class TestAggregateRunsForTask:
         assert result.tokens_out_total == 150
         assert abs(result.dollar_cost_total - 0.03) < 1e-9
 
+    def test_dollar_cost_run_count_mixed_coverage(self, adapter: SQLiteStorageAdapter) -> None:
+        """FR-USAGE-6: dollar_cost_run_count equals the count of non-NULL
+        dollar_cost runs in the window, independent of the total run_count."""
+        adapter.write_run(_run("a" * 32, dollar_cost=0.01), [])
+        adapter.write_run(_run("b" * 32, dollar_cost=0.02), [])
+        adapter.write_run(_run("c" * 32, dollar_cost=None), [])
+
+        result = adapter.aggregate_runs_for_task("task.a")
+        assert result.run_count == 3
+        assert result.dollar_cost_run_count == 2
+
+    def test_dollar_cost_run_count_zero_when_none_have_cost(
+        self, adapter: SQLiteStorageAdapter
+    ) -> None:
+        adapter.write_run(_run("a" * 32, dollar_cost=None), [])
+        result = adapter.aggregate_runs_for_task("task.a")
+        assert result.dollar_cost_run_count == 0
+
     def test_successful_tokens_only_success_status(self, adapter: SQLiteStorageAdapter) -> None:
         adapter.write_run(
             _run("a" * 32, status=RunStatus.SUCCESS, tokens_in=100, tokens_out=50), []
@@ -158,6 +177,7 @@ class TestAggregateScoresForTask:
                 metric_name="quality",
                 scorer=ScorerKind.JUDGE,
                 value_numeric=0.9,
+                scorer_version="v2",
             )
         )
         adapter.write_score(
@@ -218,6 +238,7 @@ class TestAggregateScoresForTask:
                 scorer=ScorerKind.DETERMINISTIC,
                 value_numeric=None,
                 value_label="fail",
+                scorer_version="v2",
             )
         )
 

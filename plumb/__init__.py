@@ -1,4 +1,4 @@
-from plumb.api import RunHandle, run
+from plumb.api import RunHandle, resume_run, run
 from plumb.autocapture import (
     install as autocapture_install,
     is_installed as autocapture_is_installed,
@@ -21,15 +21,17 @@ from plumb.core.entities import (
 from plumb.core.errors import (
     BlobNotFoundError,
     JudgeError,
+    NotFoundError,
     PlumbError,
     StorageError,
     ValidationError,
 )
 
-__version__ = "1.0.1"  # hardcoded per context §6 item 1; switch to importlib.metadata at PyPI ship
+__version__ = "1.1.0"  # hardcoded per context §6 item 1; switch to importlib.metadata at PyPI ship
 
 __all__ = [
     "run",
+    "resume_run",
     "RunHandle",  # public for type hints only; direct construction raises TypeError
     "autocapture_install",
     "autocapture_uninstall",
@@ -51,5 +53,6 @@ __all__ = [
     "BlobNotFoundError",
     "ValidationError",
     "JudgeError",
+    "NotFoundError",
     "__version__",
 ]

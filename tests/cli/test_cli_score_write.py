@@ -117,6 +117,66 @@ def test_score_write_neither_flag_exit_1(storage, db_path) -> None:
     assert "Exactly one" in combined
 
 
+def test_score_write_idempotency_key_flag_threads_through(storage, db_path) -> None:
+    run = make_run(1)
+    storage.write_run(run, [])
+    storage.close()
+
+    result = _invoke(
+        db_path,
+        "--run-id",
+        run.run_id,
+        "--metric",
+        "quality",
+        "--scorer",
+        "human",
+        "--value-numeric",
+        "0.9",
+        "--idempotency-key",
+        "my-key",
+    )
+    assert result.exit_code == 0, result.output
+
+    from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
+    from tests.cli.conftest import _Clock
+
+    with SQLiteStorageAdapter(db_path, clock=_Clock()) as st:
+        scores = st.get_scores_for_run(run.run_id)
+    assert len(scores) == 1
+
+
+def test_score_write_duplicate_is_noop_not_error(storage, db_path) -> None:
+    run = make_run(1)
+    storage.write_run(run, [])
+    storage.close()
+
+    args = [
+        "--run-id",
+        run.run_id,
+        "--metric",
+        "quality",
+        "--scorer",
+        "human",
+        "--scorer-version",
+        "v1",
+        "--value-numeric",
+        "0.9",
+    ]
+    first = _invoke(db_path, *args)
+    assert first.exit_code == 0, first.output
+
+    second = _invoke(db_path, *args)
+    assert second.exit_code == 0, second.output
+    assert "no-op" in second.output
+
+    from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
+    from tests.cli.conftest import _Clock
+
+    with SQLiteStorageAdapter(db_path, clock=_Clock()) as st:
+        scores = st.get_scores_for_run(run.run_id)
+    assert len(scores) == 1
+
+
 def test_score_write_unknown_run_exit_1(db_path) -> None:
     result = _invoke(
         db_path,

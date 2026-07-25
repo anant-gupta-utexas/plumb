@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sqlite3
@@ -13,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from plumb.adapters._pragmas import apply_pragmas, verify_pragmas
-from plumb.adapters._schema import DDL_STATEMENTS, SCHEMA_VERSION
+from plumb.adapters._schema import DDL_STATEMENTS, MIGRATION_1_TO_2, SCHEMA_VERSION
 from plumb.core.entities import (
     Example,
     ExampleSource,
@@ -27,7 +28,7 @@ from plumb.core.entities import (
     SpanKind,
     SpanStatus,
 )
-from plumb.core.errors import StorageError, ValidationError
+from plumb.core.errors import NotFoundError, StorageError, ValidationError
 from plumb.core.ports import Clock
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,8 @@ class TaskRunAggregate:
         stalled_count: Runs with status ``stalled``.
         latency_ms_values: List of end-to-end latency values in ms (for percentile compute).
         dollar_cost_total: Sum of ``dollar_cost`` across all matching runs.
+        dollar_cost_run_count: Count of matching runs with a non-NULL ``dollar_cost``
+            (FR-USAGE-6) — signals partial cost coverage when < run_count.
         tokens_in_total: Sum of ``tokens_in`` across all matching runs.
         tokens_out_total: Sum of ``tokens_out`` across all matching runs.
         successful_tokens_total: Combined token total for successful runs only.
@@ -59,6 +62,7 @@ class TaskRunAggregate:
     stalled_count: int
     latency_ms_values: list[float]
     dollar_cost_total: float | None
+    dollar_cost_run_count: int
     tokens_in_total: int | None
     tokens_out_total: int | None
     successful_tokens_total: int | None
@@ -143,12 +147,17 @@ def _run_to_row(run: Run) -> tuple[Any, ...]:
 
 
 def _span_to_row(span: Span) -> tuple[Any, ...]:
+    # Populate the legacy summed `tokens` column for backward-compat reads
+    # (FR-TOKENS-2) alongside the new split tokens_in/tokens_out columns.
     tokens: int | None = None
     if span.tokens_in is not None or span.tokens_out is not None:
         tokens = (span.tokens_in or 0) + (span.tokens_out or 0)
     latency_ms: int | None = None
     if span.latency_ms is not None:
         latency_ms = int(span.latency_ms)
+    # attributes is validated (serializability + size cap) at the add_span API
+    # boundary (FR-ATTR-3/4) — serialize unconditionally here.
+    attributes_json = json.dumps(span.attributes) if span.attributes is not None else None
     return (
         span.span_id,
         span.run_id,
@@ -158,9 +167,12 @@ def _span_to_row(span: Span) -> tuple[Any, ...]:
         span.input_hash,
         span.output_hash,
         tokens,
+        span.tokens_in,
+        span.tokens_out,
         latency_ms,
         span.status.value if span.status is not None else None,
         span.error_type,
+        attributes_json,
     )
 
 
@@ -175,6 +187,7 @@ def _score_to_row(score: Score) -> tuple[Any, ...]:
         score.value_numeric,
         score.value_label,
         _dt_to_iso(score.scored_at),
+        score.rationale,
     )
 
 
@@ -213,14 +226,36 @@ def _row_to_run(row: sqlite3.Row) -> Run:
     )
 
 
+def _attributes_from_row(row: sqlite3.Row) -> dict[str, Any] | None:
+    """Deserialize the `attributes` column — never raise on read (NFR-Rel-1).
+
+    A malformed/legacy (non-JSON, or JSON-but-not-a-dict) value surfaces as
+    `None` rather than propagating a parse error to the caller.
+    """
+    try:
+        raw = row["attributes"]
+    except (IndexError, KeyError):
+        return None  # pre-migration row shape (column absent from this SELECT)
+    if raw is None:
+        return None
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def _row_to_span(row: sqlite3.Row) -> Span:
-    # DB stores a single `tokens` total (tokens_in + tokens_out); surfaced as
-    # tokens_in on read.  tokens_out is always None after a round-trip.
-    # See Span docstring and deferred-features.md for the v2 column-split plan.
-    tokens_in: int | None = None
-    tokens_out: int | None = None
-    if row["tokens"] is not None:
+    # Post-migration rows carry the real tokens_in/tokens_out split; prefer it.
+    # Pre-migration (v1.0) rows have tokens_in IS NULL — fall back to the legacy
+    # summed `tokens` column, surfaced as tokens_in with tokens_out left None
+    # (FR-TOKENS-3: never guess a split for a legacy row).
+    if row["tokens_in"] is not None:
+        tokens_in = row["tokens_in"]
+        tokens_out = row["tokens_out"]
+    else:
         tokens_in = row["tokens"]
+        tokens_out = None
     latency: float | None = None
     if row["latency_ms"] is not None:
         latency = float(row["latency_ms"])
@@ -238,6 +273,7 @@ def _row_to_span(row: sqlite3.Row) -> Span:
         latency_ms=latency,
         status=SpanStatus(status_val) if status_val is not None else None,
         error_type=row["error_type"],
+        attributes=_attributes_from_row(row),
     )
 
 
@@ -252,6 +288,7 @@ def _row_to_score(row: sqlite3.Row) -> Score:
         value_numeric=row["value_numeric"],
         value_label=row["value_label"],
         scored_at=_iso_to_dt(row["scored_at"]),  # type: ignore[arg-type]
+        rationale=row["rationale"],
     )
 
 
@@ -298,22 +335,27 @@ SET
     sub_agent_model     = ?,
     prompt_version      = ?,
     tool_schema_version = ?,
-    git_sha             = ?
+    git_sha             = ?,
+    tokens_in           = ?,
+    tokens_out          = ?,
+    dollar_cost         = ?
 WHERE run_id = ?
 """.strip()
 
 _INSERT_SPAN = """
 INSERT INTO spans (
     span_id, run_id, parent_span_id, kind, name,
-    input_hash, output_hash, tokens, latency_ms, status, error_type
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    input_hash, output_hash, tokens, tokens_in, tokens_out, latency_ms, status, error_type,
+    attributes
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """.strip()
 
 _INSERT_SCORE = """
 INSERT INTO scores (
     score_id, run_id, span_id, metric_name, scorer, scorer_version,
-    value_numeric, value_label, scored_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    value_numeric, value_label, scored_at, rationale
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(run_id, metric_name, scorer_version, IFNULL(span_id, '')) DO NOTHING
 """.strip()
 
 _INSERT_EXAMPLE = """
@@ -372,10 +414,57 @@ class SQLiteStorageAdapter:
                 self._conn.execute(stmt)
 
         version: int = self._conn.execute("PRAGMA user_version").fetchone()[0]
-        if version == 0:
-            self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        if version in (0, 1):
+            # version==0: brand-new DB — DDL_STATEMENTS just created the v1.0-shaped
+            # tables (pinned verbatim to TRD §7.1); apply the v1.1 migration on top so
+            # a fresh DB and a migrated DB converge on the same user_version=2 shape.
+            # version==1: a genuine v1.0 DB being opened by this build.
+            self._migrate_1_to_2()
         elif version != SCHEMA_VERSION:
             raise StorageError(f"Schema version mismatch: db={version} expected={SCHEMA_VERSION}")
+
+    def _migrate_1_to_2(self) -> None:
+        """Apply the v1.1 additive migration (DATA-MIG-2..6) in one transaction.
+
+        DATA-MIG-6: abort before any DDL runs if two or more `scores` rows
+        already collide under the new (run_id, metric_name, scorer_version,
+        IFNULL(span_id,'')) unique key — never silently drop data to satisfy
+        a new constraint.
+        """
+        dupes = self._conn.execute(
+            """
+            SELECT run_id, metric_name, scorer_version,
+                   IFNULL(span_id, '') AS span_key, COUNT(*) AS n
+            FROM scores
+            GROUP BY run_id, metric_name, scorer_version, span_key
+            HAVING COUNT(*) > 1
+            """
+        ).fetchall()
+        if dupes:
+            detail = "; ".join(
+                f"(run_id={r['run_id']}, metric_name={r['metric_name']!r}, "
+                f"scorer_version={r['scorer_version']!r}, span_id={r['span_key'] or 'NULL'!r}): "
+                f"{r['n']} rows"
+                for r in dupes
+            )
+            raise StorageError(
+                "Migration 1->2 aborted: duplicate scores rows under the new "
+                f"idempotency key — {detail}"
+            )
+
+        try:
+            self._conn.execute("BEGIN")
+            try:
+                for stmt in MIGRATION_1_TO_2:
+                    self._conn.execute(stmt)
+                self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            except BaseException:
+                self._conn.execute("ROLLBACK")
+                raise
+            else:
+                self._conn.execute("COMMIT")
+        except sqlite3.Error as exc:
+            raise StorageError(f"Migration 1->2 failed and was rolled back: {exc}") from exc
 
     def _sweep_stalled_runs(self) -> None:
         threshold = self._clock.now() - timedelta(seconds=self._stalled_threshold_seconds)
@@ -441,6 +530,9 @@ class SQLiteStorageAdapter:
         prompt_version: str | None = None,
         tool_schema_version: str | None = None,
         git_sha: str | None = None,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
+        dollar_cost: float | None = None,
     ) -> None:
         """UPDATE the pending row to its final status and batch-INSERT spans.
 
@@ -460,6 +552,9 @@ class SQLiteStorageAdapter:
                         prompt_version,
                         tool_schema_version,
                         git_sha,
+                        tokens_in,
+                        tokens_out,
+                        dollar_cost,
                         run_id,
                     ),
                 )
@@ -479,10 +574,22 @@ class SQLiteStorageAdapter:
         except sqlite3.Error as exc:
             raise StorageError(str(exc)) from exc
 
-    def write_score(self, score: Score) -> None:
+    def write_score(self, score: Score, *, idempotency_key: str | None = None) -> bool:
+        """Insert a score row idempotently on (run_id, metric_name, scorer_version, span_id).
+
+        ``idempotency_key`` is advisory only (FR-IDEM-4) — it is not stored and
+        is not part of the conflict target; the UNIQUE index `idx_scores_idem`
+        is the actual enforcement.
+
+        Returns:
+            ``True`` if a new row was inserted, ``False`` if a row already
+            existed under the same semantic key (no-op).
+        """
+        del idempotency_key  # advisory only; not persisted, not part of the conflict target
         try:
             with self._write_lock:
-                self._conn.execute(_INSERT_SCORE, _score_to_row(score))
+                cur = self._conn.execute(_INSERT_SCORE, _score_to_row(score))
+                return cur.rowcount == 1
         except sqlite3.Error as exc:
             raise StorageError(str(exc)) from exc
 
@@ -492,6 +599,17 @@ class SQLiteStorageAdapter:
                 self._conn.execute(_INSERT_EXAMPLE, _example_to_row(example))
         except sqlite3.Error as exc:
             raise StorageError(str(exc)) from exc
+
+    def open_or_resume(self, run_id: str) -> Run:
+        """Return the existing `runs` row for `run_id` so it can be resumed.
+
+        Raises:
+            NotFoundError: if no row exists for `run_id`.
+        """
+        row = self._conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+        if row is None:
+            raise NotFoundError(f"run {run_id!r} not found")
+        return _row_to_run(row)
 
     # -------------------------------------------------------------------------
     # StorageReader
@@ -741,6 +859,7 @@ class SQLiteStorageAdapter:
                 SUM(CASE WHEN status = 'aborted' THEN 1 ELSE 0 END) AS aborted_count,
                 SUM(CASE WHEN status = 'stalled' THEN 1 ELSE 0 END) AS stalled_count,
                 SUM(dollar_cost)                                AS dollar_cost_total,
+                COUNT(dollar_cost)                              AS dollar_cost_run_count,
                 SUM(tokens_in)                                  AS tokens_in_total,
                 SUM(tokens_out)                                 AS tokens_out_total,
                 SUM(
@@ -782,6 +901,7 @@ class SQLiteStorageAdapter:
             stalled_count=row["stalled_count"] or 0,
             latency_ms_values=latency_values,
             dollar_cost_total=row["dollar_cost_total"],
+            dollar_cost_run_count=row["dollar_cost_run_count"] or 0,
             tokens_in_total=row["tokens_in_total"],
             tokens_out_total=row["tokens_out_total"],
             successful_tokens_total=successful_tokens,

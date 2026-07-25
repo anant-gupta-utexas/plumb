@@ -134,6 +134,7 @@ def compute_task_stats(
         latency_ms_p50=p50,
         latency_ms_p95=p95,
         dollar_cost_total=dollar_cost,
+        dollar_cost_run_count=agg.dollar_cost_run_count,
         tokens_in_total=tokens_in,
         tokens_out_total=tokens_out,
         tokens_per_resolved_task=tokens_per_resolved,

@@ -92,6 +92,9 @@ class FakeStorageWriter:
         prompt_version: str | None = None,
         tool_schema_version: str | None = None,
         git_sha: str | None = None,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
+        dollar_cost: float | None = None,
     ) -> None:
         pending = self._pending.pop(run_id, None)
         if pending is None:
@@ -112,17 +115,41 @@ class FakeStorageWriter:
             prompt_version=prompt_version,
             tool_schema_version=tool_schema_version,
             git_sha=git_sha,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            dollar_cost=dollar_cost,
         )
         self.runs.append((run, list(spans)))
 
     def write_run(self, run: Run, spans: Sequence[Span]) -> None:
         self.runs.append((run, list(spans)))
 
-    def write_score(self, score: Score) -> None:
+    def write_score(self, score: Score, *, idempotency_key: str | None = None) -> bool:
+        del idempotency_key  # advisory only; FakeStorageWriter does not dedup
         self.scores.append(score)
+        return True
 
     def write_example(self, example: Example) -> None:
         self.examples.append(example)
+
+    def open_or_resume(self, run_id: str) -> Run:
+        pending = self._pending.get(run_id)
+        if pending is not None:
+            task_id, kind, parent_run_id, start_ts = pending
+            return Run(
+                run_id=run_id,
+                task_id=task_id,
+                kind=kind,
+                status=RunStatus.PENDING,
+                start_ts=start_ts,
+                parent_run_id=parent_run_id,
+            )
+        for run, _spans in reversed(self.runs):
+            if run.run_id == run_id:
+                return run
+        from plumb.core.errors import NotFoundError
+
+        raise NotFoundError(f"run {run_id!r} not found")
 
     # -- convenience helpers --------------------------------------------------
 

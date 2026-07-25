@@ -75,6 +75,23 @@ with run(task_id="summarise", kind="online", orchestrator_model="claude-sonnet-4
 # Run, span, and score are written to storage here
 ```
 
+### Record examples, usage, and cross-process hand-offs
+
+```python
+from plumb import run, resume_run, SpanKind
+
+with run(task_id="summarise", kind="online") as r:
+    span_id = r.add_span(SpanKind.LLM, "generate-summary", tokens=(512, 128))
+    r.add_score("answer_relevance", "deterministic", value_numeric=0.95, span_id=span_id)
+    r.add_example("a" * 64, source="production_promotion")  # promote this run's input for offline eval
+    r.set_usage(dollar_cost=0.0031)  # tokens_in/tokens_out auto-fill from the span above
+
+# Later, in a different process, resume a run a supervisor left `pending`:
+with resume_run(received_run_id) as r:
+    r.add_span(SpanKind.TOOL, "search")
+    r.set_usage(dollar_cost=0.0009)  # last-wins per field; not summed with the earlier call
+```
+
 ## Autocapture works automatically
 
 With `PLUMB_AUTOCAPTURE=1` (the default), plumb automatically patches supported
