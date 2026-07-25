@@ -1,26 +1,37 @@
 ---
-title: plumb v1.1 "Atlas unblock" — v3-driven scope deltas + TRS brief
-status: planning — TRD §15 amendment applied (5b6b3ab); amended 2026-07-24 by a verified consumer finding. Next step is the v1.1 TRS.
+title: plumb TRD-v2 — v1.1 "Atlas unblock" scope deltas, decisions & TRS brief
+status: decided — all scope calls resolved; TRD §15 carries the normative contract. Next step is the v1.1 TRS.
 created: 2026-07-21
 last_reviewed: 2026-07-24
+moved: 2026-07-24 — was docs/1_product_and_research/atlas-unblock-v1.1-scope.md
 tags: [v1.1, schema-v2, atlas, loop-mode, cost, tokens, attributes, migration]
 ---
 
-# plumb v1.1 "Atlas unblock" — scope deltas for the atlas loop (v3)
+# plumb TRD-v2 — v1.1 "Atlas unblock" scope deltas & decision record
+
+> **Relationship to [`TRD.md`](TRD.md).** `TRD.md` §15 is the **normative
+> contract** for v1.1 — the FRs, NFRs, and acceptance criteria an implementer
+> builds against. **This document is the companion decision record**: the
+> reasoning, the options weighed, the rejected alternatives, and the scope
+> boundary. If the two ever disagree on *what to build*, `TRD.md` §15 wins and
+> this file is stale. Read this one to learn *why* §15 says what it says.
 
 ## Why this doc exists
 
 An external consumer (the **atlas loop**, atlas v3 — an autonomous,
 minimal-input development loop) is being built. Its measurement needs were
 diffed against plumb's already-specified **TRD §15 "v1.1 — Atlas unblock +
-schema v2"**. §15 covers most of what the loop needs, but the diff surfaced
-**two features that are NOT yet in the TRD** and one **factual correction** to
-an assumption the loop's own planning made about plumb.
+schema v2"**. §15 covered most of what the loop needs; the diff surfaced two
+additional features and one factual correction to an assumption the loop's own
+planning had made about plumb.
 
-**This doc is the bridge:** it records exactly what to add to plumb's TRD §15
-before cutting the v1.1 TRS, so the next session can (1) amend the TRD, then
-(2) run `/dev-docs-be` on §15 to produce the flat task list. It does **not**
-restate §15's five already-specified features except to reference them.
+**Status: all of it has landed.** The two features (P1-a `set_usage`, P1-b
+`spans.attributes`) were written into TRD §15 as §15.7/§15.8 (commit
+`5b6b3ab`), and a verified consumer finding on 2026-07-24 corrected a
+falsified premise inside P1-a (see "AMENDMENT 2026-07-24" below). The Delta
+sections that follow are preserved as the **historical record of how those
+decisions were reached** — they are no longer a to-do list. The remaining open
+step is cutting the v1.1 TRS.
 
 > Consumer-agnostic framing: plumb is a standalone measurement library. "The
 > loop" below is simply *a consumer that records runs*. Nothing here couples
@@ -354,7 +365,7 @@ Whether plumb should *auto-derive* `runs.tokens_*` by summing spans at finalize
 
 ---
 
-## Delta 2 (P1-b) — `spans.attributes` JSON column  [proposal in backlog; NOT in TRD §15 migration — ADD to the migration]
+## Delta 2 (P1-b) — `spans.attributes` JSON column  [DECIDED: included — now TRD §15.8; sign-off discharged 2026-07-24]
 
 **Status.** Recorded in `deferred-features.md` (2026-06-07, line 438) as a
 **proposal needing sign-off**, explicitly flagged to **ride the v1.1
@@ -476,6 +487,93 @@ No other §15 subsection changes. §16/§17 are untouched.
 
 ---
 
+## Backlog sweep — is anything else migration-locked? (2026-07-24)
+
+`deferred-features.md` holds 24 entries. Most are scheduled by PRD §10 into
+v1.2/v2.0 and are irrelevant to this release. But the v1.1 `user_version` 1→2
+migration is a **one-way door**: once it commits and the schema re-freezes
+(DATA-MIG-3), any further schema change costs a whole release cycle. So the
+only question worth asking of the backlog right now is:
+
+> **Does this entry require a schema change? If yes, it must ride this
+> migration or wait for v1.2.**
+
+Everything else can ship in any release and does not belong in a v1.1 scope
+conversation. Reviewed against that filter:
+
+### Already pulled onto this migration (no action — recorded for completeness)
+
+Five backlog entries were previously pulled forward onto the v1.1 migration and
+are already specified in §15: `scores.rationale` (§15.4), span
+`tokens_in`/`tokens_out` split (§15.5), idempotent score ingestion (§15.6),
+`resume_run` (§15.1), `add_example` (§15.2) — plus `spans.attributes` (§15.8),
+signed off in this pass.
+
+### Evaluated and **excluded** from v1.1
+
+**`v1.1 — WAL/SHM file permissions`** (2026-04-29, code-review finding M-7).
+**Excluded. Not migration-locked.** The fix is a `chmod` on `db_path + "-wal"`
+/ `"-shm"` after `apply_pragmas` — **zero schema involvement**, so it carries
+no deadline pressure from the `user_version` bump and can ship in any release
+without penalty.
+
+Worth stating the security reasoning rather than waving it through: this is a
+real confidentiality gap (a second local user can read un-checkpointed
+transaction payloads from a `0644` WAL), and it is cheap. The reason it stays
+out is **not** that it is unimportant but that v1.1 is a migration release
+whose risk profile should stay narrow — mixing an unrelated file-permission
+change into the release whose failure mode is "corrupted upgrade path" adds
+review surface for no scheduling gain. It loses nothing by waiting.
+
+> **Recommendation to the PRD owner:** schedule this into v1.2 explicitly, or
+> ship it as a v1.0.2 patch — it is independent of both release lines. Left
+> unscheduled it will keep resurfacing in every future scope review. *(This is
+> a PRD §10 scheduling call, not a TRD call — flagged, not decided here.)*
+
+**`v2 — plumb run stats top-level-only vs. all-runs display`** (2026-04-29).
+**Excluded. Not migration-locked and not yet justified.** Pure CLI display
+behaviour — no schema, no storage, no API change. Its own revisit trigger
+("first user complaint" / ">50% of recorded runs are child runs") has **not**
+fired. Note the atlas loop uses child runs heavily, so that trigger may fire
+during v3 dogfooding; at that point it is a v1.2 CLI change, still with no
+schema implication.
+
+This one is also adjacent to a scope note already recorded above: whether
+`plumb run stats` should render cost at all is a separate v1.2 CLI-parity
+question. **If both fire, they should be scoped together as one "CLI stats
+ergonomics" tranche in v1.2** rather than dribbling in as two unrelated
+patches.
+
+### Explicitly NOT pulled in (scheduled elsewhere; listed to prevent re-litigation)
+
+| Entry | PRD-scheduled | Why it is not a v1.1 question |
+|---|---|---|
+| Per-metric model env overrides | v1.2 | `Settings` change only; no schema. |
+| Concurrent judge calls (`--concurrency N`) | v1.2 | Judge-path throughput; no schema. |
+| File-backed prompt edit UX | v1.2 | CLI surface only; no schema. |
+| Plan-vs-execution attribution | v1.2 | New `scores.metric_name` values — **fits the existing schema**, needs no migration. |
+| MAST 14-mode failure tagging | v1.2 | Same — rides `scores.metric_name`/`value_label`. |
+| Judge calibration vs human α | v1.2 | Analysis layer; no schema. |
+| Variance decomposition reports | v1.2 | Needs a tool-replay layer; no schema. |
+| SLM judges, multi-judge ensembling, streaming verdicts, tool-use judges | v2.0 | New adapter classes behind the existing `JudgeAdapter` port; the ports-and-adapters seam absorbs them with no schema change. |
+| Router Pareto frontier, efficiency frontier | v2.0 | Reporting/analysis over existing columns. |
+| Long-running agent extension | v2.0 | **Would need schema** (`subgoals` metadata) — but its revisit trigger (a single run > 30 min) has not fired, and v2.0 gets its own migration. Correctly deferred. |
+
+**Note the pattern**: almost every deferred item is schema-free by
+construction. That is the four-table thesis paying off — new metrics ride
+`scores.metric_name`, new judges ride the adapter port, new reports ride
+existing columns. The only genuinely schema-hungry deferred item
+(`subgoals`) is correctly parked behind an untriggered condition.
+
+### Conclusion
+
+**No backlog entry needs to be added to the v1.1 migration.** The migration's
+`ALTER` list is complete as specified in §15.3 (four `ALTER`s + one `CREATE
+UNIQUE INDEX`). The sweep's one actionable output is a scheduling flag for
+WAL/SHM permissions, which is a PRD call and does not block the TRS.
+
+---
+
 ## Brief for the TRS (`/dev-docs-be` on §15, next session)
 
 Run `/dev-docs-be` against the **amended** §15 to produce the flat task list
@@ -542,8 +640,8 @@ Run `/dev-docs-be` against the **amended** §15 to produce the flat task list
 
 ## Cross-references
 
-- plumb TRD (§14 roadmap, §15 v1.1 contract): [`../2_architecture/TRD.md`](../2_architecture/TRD.md)
-- Deferred-features backlog (per-decision rationale; P1-b entry at 2026-06-07): [`../2_architecture/deferred-features.md`](../2_architecture/deferred-features.md)
-- Phase-2 prioritization (the `spans.attributes` proposal's home): [`phase-2-prioritization.md`](phase-2-prioritization.md)
-- Schema/metrics v1: [`schema-and-metrics-v1.md`](schema-and-metrics-v1.md)
+- plumb TRD (§14 roadmap, §15 v1.1 **normative contract** — wins over this doc on any "what to build" conflict): [`TRD.md`](TRD.md)
+- Deferred-features backlog (per-decision rationale; P1-b sign-off at 2026-07-24; swept for migration-locked items above): [`deferred-features.md`](deferred-features.md)
+- Phase-2 prioritization (the `spans.attributes` proposal's home): [`../1_product_and_research/phase-2-prioritization.md`](../1_product_and_research/phase-2-prioritization.md)
+- Schema/metrics v1: [`../1_product_and_research/schema-and-metrics-v1.md`](../1_product_and_research/schema-and-metrics-v1.md)
 - Source anchors: `plumb/api.py` (RunHandle), `plumb/adapters/storage_sqlite.py` (`_FINALIZE_RUN`:291, `finalize_run`:431, aggregation:739+), `plumb/adapters/_schema.py` (runs/spans DDL, `SCHEMA_VERSION`)

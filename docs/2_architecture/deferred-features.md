@@ -19,6 +19,8 @@
 > **Adding entries.** Append a new section at the bottom of the relevant group. Never silently remove or edit historical entries — supersede with a new dated entry and update the old one's Decision line (e.g., `~~deferred to v1.1~~ → shipped in v1.2, see entry dated 2026-08-01`).
 >
 > **Scheduling note (2026-06-01).** The PRD §10 Release Plan now schedules many of these entries into concrete releases (v1.1 / v1.2 / v2.0). The PRD is the authority for *what ships when*; this file remains the authority for *why each option was picked*. Entries scheduled into a release have their Decision line annotated with `→ scheduled PRD §10 vX.Y`. Note some entries dated as "v1.1" here were renumbered to v1.2 in the PRD (dependency ordering); the annotation reflects the PRD-authoritative release.
+>
+> **Migration-lock sweep (2026-07-24).** This backlog was swept against the v1.1 `user_version` 1→2 migration to catch anything schema-bearing that must ride it or wait a full release. **Outcome: nothing further needs to be added** — the §15.3 `ALTER` list is complete. Two entries were evaluated and deliberately excluded (WAL/SHM permissions; `run stats` child-run display), both because they are schema-free and therefore carry no deadline pressure. The reasoning, plus a table of every entry checked, is in [`TRD-v2.md`](TRD-v2.md) "Backlog sweep". One open scheduling flag for the PRD owner: **WAL/SHM file permissions is unscheduled** and will keep resurfacing until it lands in v1.2 or a v1.0.2 patch.
 
 ---
 

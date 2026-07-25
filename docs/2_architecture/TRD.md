@@ -828,7 +828,7 @@ All acceptance criteria are stated in Given/When/Then form and tied back to a PR
 **Seven features** (each maps to a `deferred-features.md` entry). Features 6–7
 were added when an external consumer's needs were diffed against this section;
 their per-decision rationale and the acceptance-criteria detail live in
-[`../1_product_and_research/atlas-unblock-v1.1-scope.md`](../1_product_and_research/atlas-unblock-v1.1-scope.md):
+[`TRD-v2.md`](TRD-v2.md):
 
 | # | Feature | Backlog entry | Type |
 | --- | --- | --- | --- |
@@ -840,7 +840,7 @@ their per-decision rationale and the acceptance-criteria detail live in
 | 6 | `set_usage(...)` run-level cost/usage writer + partial-coverage reporting | (scope doc, 2026-07-21; amended 2026-07-24) — no existing writer for `runs.dollar_cost`/`tokens_in`/`tokens_out` | API + storage + `/stats` response field (no schema) |
 | 7 | `spans.attributes` JSON column | "v1.1 — `spans.attributes` structured-data column" (2026-06-07) — **sign-off met 2026-07-24**, accepted | Schema (additive) |
 
-> **Amendment 2026-07-24 (heterogeneous backend cost).** A verified consumer finding (Codex CLI emits **no** cost field; Claude's CLI does) falsified a premise in FR-USAGE-3. Consequences, all folded into §15.7/§15.8/§15.9/§15.10 below: D-a1 re-resolved as a **split** (explicit-only `dollar_cost`, auto-derived `tokens_*`); a **partial-coverage count** added to `/stats` so a subset sum cannot present as complete; token→dollar derivation recorded as a **permanent non-goal** (FR-USAGE-3a); `spans.attributes` confirmed **included** and now load-bearing as the home for backend-specific token breakdown. Full reasoning and the rejected alternatives: [`../1_product_and_research/atlas-unblock-v1.1-scope.md`](../1_product_and_research/atlas-unblock-v1.1-scope.md) "AMENDMENT 2026-07-24".
+> **Amendment 2026-07-24 (heterogeneous backend cost).** A verified consumer finding (Codex CLI emits **no** cost field; Claude's CLI does) falsified a premise in FR-USAGE-3. Consequences, all folded into §15.7/§15.8/§15.9/§15.10 below: D-a1 re-resolved as a **split** (explicit-only `dollar_cost`, auto-derived `tokens_*`); a **partial-coverage count** added to `/stats` so a subset sum cannot present as complete; token→dollar derivation recorded as a **permanent non-goal** (FR-USAGE-3a); `spans.attributes` confirmed **included** and now load-bearing as the home for backend-specific token breakdown. Full reasoning and the rejected alternatives: [`TRD-v2.md`](TRD-v2.md) "AMENDMENT 2026-07-24".
 
 ### 15.1 `plumb.resume_run(run_id)` — third entry point
 
@@ -944,7 +944,7 @@ already exist (v1.0 DDL); v1.1 only starts writing them on the online path.
 
 ### 15.7 `set_usage(...)` — run-level cost / usage writer
 
-**Context.** `runs.dollar_cost`, `runs.tokens_in`, `runs.tokens_out` exist in the v1.0 DDL (§7.1) but **no supported path writes them on the online run**: `finalize_run` / `_FINALIZE_RUN` (`storage_sqlite.py`) `SET`s only status/timestamps/model/version fields, and `RunHandle` has no usage setter (`set_models` is the only late-bind method). Aggregations that `SUM(dollar_cost)` (`run stats`, HTTP `/stats`) therefore sum a column the online path leaves `NULL`. This feature closes that gap. **No schema change** — the columns already exist. See [`../1_product_and_research/atlas-unblock-v1.1-scope.md`](../1_product_and_research/atlas-unblock-v1.1-scope.md) "Delta 1 (P1-a)".
+**Context.** `runs.dollar_cost`, `runs.tokens_in`, `runs.tokens_out` exist in the v1.0 DDL (§7.1) but **no supported path writes them on the online run**: `finalize_run` / `_FINALIZE_RUN` (`storage_sqlite.py`) `SET`s only status/timestamps/model/version fields, and `RunHandle` has no usage setter (`set_models` is the only late-bind method). Aggregations that `SUM(dollar_cost)` (`run stats`, HTTP `/stats`) therefore sum a column the online path leaves `NULL`. This feature closes that gap. **No schema change** — the columns already exist. See [`TRD-v2.md`](TRD-v2.md) "Delta 1 (P1-a)".
 
 **FR-USAGE-1 (MUST).** `RunHandle` gains a method (this is the second new handle method of v1.1, alongside `add_example`; the FR-API-4 renegotiation in §15.2 covers the surface-gate change):
 
@@ -992,7 +992,7 @@ Rejected alternatives, recorded so they are not re-litigated: (a) **a `runs.cost
 
 ### 15.8 `spans.attributes` — structured per-span JSON column
 
-**Context.** A span persists only `kind`, `name`, `input_hash`, `output_hash`, `tokens`, `latency_ms`, `status`, `error_type`. Consumers routinely compute structured per-span metadata at instrumentation time (ingestion counters; orchestrator worker metadata such as ticket id / attempt / failure-mode / lane / engine; per-stage workflow context) with no durable home except smuggling it into `task_id` prefixes or content-hash blobs. Recorded as a proposal in `deferred-features.md` (2026-06-07); **included in v1.1** because it must ride this `user_version` 1→2 migration or pay a second `SCHEMA_VERSION` bump later. Full rationale + the minimal-surface tension: [`../1_product_and_research/atlas-unblock-v1.1-scope.md`](../1_product_and_research/atlas-unblock-v1.1-scope.md) "Delta 2 (P1-b)".
+**Context.** A span persists only `kind`, `name`, `input_hash`, `output_hash`, `tokens`, `latency_ms`, `status`, `error_type`. Consumers routinely compute structured per-span metadata at instrumentation time (ingestion counters; orchestrator worker metadata such as ticket id / attempt / failure-mode / lane / engine; per-stage workflow context) with no durable home except smuggling it into `task_id` prefixes or content-hash blobs. Recorded as a proposal in `deferred-features.md` (2026-06-07); **included in v1.1** because it must ride this `user_version` 1→2 migration or pay a second `SCHEMA_VERSION` bump later. Full rationale + the minimal-surface tension: [`TRD-v2.md`](TRD-v2.md) "Delta 2 (P1-b)".
 
 > **Surface-thesis note.** A free-form JSON bag pushes on plumb's minimal-surface thesis. Mitigations: it is a **column, not a fifth table** (four-table thesis intact); plumb **does not interpret the keys** (opaque store/return — no metric logic reads it, so it cannot corrupt scoring); three independent consumers want the same generic field (the right abstraction vs. N named columns). The proposal is flagged in the backlog as **needing sign-off** — if a falsifier check is wanted, run `pressure-test` on it **before** the migration is cut, since a "no" removes this `ALTER` from §15.3.
 
