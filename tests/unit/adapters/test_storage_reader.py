@@ -223,8 +223,10 @@ def test_get_spans_for_run_with_tokens_and_latency(tmp_path: Path) -> None:
         results = adapter.get_spans_for_run(run.run_id)
         assert len(results) == 1
         result = results[0]
-        # DB stores tokens_in + tokens_out as a single total, surfaced as tokens_in
-        assert result.tokens_in == 15
+        # v1.1 (AC-TOKENS-1): tokens_in/tokens_out round-trip as the real split,
+        # not a summed-then-collapsed-to-tokens_in value.
+        assert result.tokens_in == 10
+        assert result.tokens_out == 5
         assert result.latency_ms == 123.0
 
 
@@ -334,15 +336,38 @@ def test_list_examples_reconstructs_entity(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_write_score_sqlite_error_wraps_as_storage_error(tmp_path: Path) -> None:
+def test_write_score_duplicate_semantic_key_is_idempotent_noop(tmp_path: Path) -> None:
+    """v1.1 (AC-IDEM-1): a duplicate (run_id, metric_name, scorer_version, span_id)
+    resolves via ON CONFLICT DO NOTHING — no error, no second row."""
     with SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter:
-        # Writing a score with a duplicate PK triggers IntegrityError → StorageError
         run = _make_run()
         adapter.write_run(run, [])
         score = _make_score("c" * 32)
-        adapter.write_score(score)
+        assert adapter.write_score(score) is True
+        assert adapter.write_score(score) is False
+        count = adapter._conn.execute("SELECT COUNT(*) FROM scores").fetchone()[0]
+        assert count == 1
+
+
+def test_write_score_pk_collision_under_different_semantic_key_raises(tmp_path: Path) -> None:
+    """A duplicate score_id (PK) with a distinct semantic key still raises —
+    ON CONFLICT only targets the idempotency index, not the primary key."""
+    with SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter:
+        run = _make_run()
+        adapter.write_run(run, [])
+        first = _make_score("c" * 32)
+        adapter.write_score(first)
+        second = Score(
+            score_id="c" * 32,  # same PK
+            run_id="a" * 32,
+            metric_name="a-different-metric",  # different semantic key
+            scorer=ScorerKind.DETERMINISTIC,
+            scorer_version="v1",
+            scored_at=_NOW,
+            value_numeric=0.5,
+        )
         with pytest.raises(StorageError):
-            adapter.write_score(score)
+            adapter.write_score(second)
 
 
 def test_write_example_sqlite_error_wraps_as_storage_error(tmp_path: Path) -> None:
@@ -678,3 +703,130 @@ def test_list_runs_hostile_kind_raises_validation_error_before_sql(tmp_path: Pat
         adapter.write_run(_make_run("a" * 32), [])
         with pytest.raises(ValidationError):
             adapter.list_runs(kind="x' OR 1=1 --")
+
+
+# ---------------------------------------------------------------------------
+# Task 3 — scores.rationale round-trip (AC-RATIONALE-1, FR-RATIONALE-3)
+# ---------------------------------------------------------------------------
+
+
+def test_score_rationale_round_trips(tmp_path: Path) -> None:
+    with SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter:
+        run = _make_run()
+        adapter.write_run(run, [])
+        score = Score(
+            score_id="c" * 32,
+            run_id="a" * 32,
+            metric_name="accuracy",
+            scorer=ScorerKind.JUDGE,
+            scorer_version="v1",
+            scored_at=_NOW,
+            value_numeric=0.5,
+            rationale="because X",
+        )
+        adapter.write_score(score)
+        results = adapter.get_scores_for_run(run.run_id)
+        assert len(results) == 1
+        assert results[0].rationale == "because X"
+
+
+def test_score_rationale_none_when_not_provided(tmp_path: Path) -> None:
+    with SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter:
+        run = _make_run()
+        adapter.write_run(run, [])
+        adapter.write_score(_make_score("c" * 32))
+        results = adapter.get_scores_for_run(run.run_id)
+        assert results[0].rationale is None
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — idempotent score ingestion (AC-IDEM-2, FR-IDEM-4)
+# ---------------------------------------------------------------------------
+
+
+def test_judge_fail_open_error_row_does_not_block_later_rescore(tmp_path: Path) -> None:
+    """AC-IDEM-2: a judge fail-open error row and a later real re-score coexist
+    because their scorer_version values differ (distinct semantic keys)."""
+    with SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter:
+        run = _make_run()
+        adapter.write_run(run, [])
+        error_score = Score(
+            score_id="c" * 32,
+            run_id="a" * 32,
+            metric_name="quality",
+            scorer=ScorerKind.JUDGE,
+            scorer_version="judge-v1:error",
+            scored_at=_NOW,
+            value_label="error",
+        )
+        real_score = Score(
+            score_id="d" * 32,
+            run_id="a" * 32,
+            metric_name="quality",
+            scorer=ScorerKind.JUDGE,
+            scorer_version="judge-v1",
+            scored_at=_NOW,
+            value_numeric=0.9,
+        )
+        assert adapter.write_score(error_score) is True
+        assert adapter.write_score(real_score) is True
+        results = adapter.get_scores_for_run(run.run_id)
+        assert len(results) == 2
+
+
+# ---------------------------------------------------------------------------
+# Task 8 — spans.attributes JSON column (AC-ATTR-1..3, FR-ATTR-4)
+# ---------------------------------------------------------------------------
+
+
+def test_span_attributes_round_trip(tmp_path: Path) -> None:
+    with SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter:
+        run = _make_run()
+        attrs = {"lane": "planned", "engine": "codex", "attempt_n": 2}
+        span = Span(
+            span_id="1" * 32, run_id=run.run_id, kind=SpanKind.LLM, name="gen", attributes=attrs
+        )
+        adapter.write_run(run, [span])
+
+        results = adapter.get_spans_for_run(run.run_id)
+        assert results[0].attributes == attrs
+
+        extracted = adapter._conn.execute(
+            "SELECT json_extract(attributes, '$.engine') FROM spans WHERE span_id = ?",
+            (span.span_id,),
+        ).fetchone()[0]
+        assert extracted == "codex"
+
+
+def test_span_attributes_none_when_not_provided(tmp_path: Path) -> None:
+    with SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter:
+        run = _make_run()
+        span = Span(span_id="1" * 32, run_id=run.run_id, kind=SpanKind.LLM, name="gen")
+        adapter.write_run(run, [span])
+        results = adapter.get_spans_for_run(run.run_id)
+        assert results[0].attributes is None
+
+
+def test_span_attributes_malformed_json_reads_back_as_none(tmp_path: Path) -> None:
+    with SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter:
+        run = _make_run()
+        adapter.write_run(run, [])
+        adapter._conn.execute(
+            "INSERT INTO spans (span_id, run_id, kind, name, attributes) VALUES (?, ?, 'llm', 'gen', ?)",
+            ("1" * 32, run.run_id, "{not valid json"),
+        )
+        results = adapter.get_spans_for_run(run.run_id)
+        assert results[0].attributes is None
+
+
+def test_idempotency_key_mismatch_still_inserts_new_row(tmp_path: Path) -> None:
+    """FR-IDEM-4: idempotency_key is advisory only — the UNIQUE index is
+    authoritative, so a fresh semantic key inserts regardless of the key passed."""
+    with SQLiteStorageAdapter(tmp_path / "test.db", clock=_CLOCK) as adapter:
+        run = _make_run()
+        adapter.write_run(run, [])
+        score = _make_score("c" * 32)
+        inserted = adapter.write_score(score, idempotency_key="does-not-match-anything")
+        assert inserted is True
+        results = adapter.get_scores_for_run(run.run_id)
+        assert len(results) == 1

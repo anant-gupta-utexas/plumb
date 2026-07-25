@@ -57,7 +57,8 @@ class TestOpenAIChatCapture:
         assert len(spans) == 1
         assert spans[0].kind.value == "llm"
         assert spans[0].name == "openai/chat/gpt-4o"
-        assert spans[0].tokens_in == 15
+        assert spans[0].tokens_in == 10
+        assert spans[0].tokens_out == 5
         assert spans[0].output_hash is not None
         assert real_bs.exists(spans[0].input_hash)
         assert real_bs.exists(spans[0].output_hash)
@@ -125,7 +126,8 @@ class TestOpenAIResponsesCapture:
         spans = adapter.get_spans_for_run(r.run_id)
         assert len(spans) == 1
         assert spans[0].name == "openai/responses/gpt-4o"
-        assert spans[0].tokens_in == 15
+        assert spans[0].tokens_in == 10
+        assert spans[0].tokens_out == 5
         assert real_bs.exists(spans[0].input_hash)
         assert real_bs.exists(spans[0].output_hash)
         assert isinstance(result, openai.types.responses.Response)
@@ -145,7 +147,8 @@ class TestOpenAIResponsesCapture:
         spans = adapter.get_spans_for_run(r.run_id)
         assert len(spans) == 1
         assert spans[0].name == "openai/responses/gpt-4o"
-        assert spans[0].tokens_in == 15
+        assert spans[0].tokens_in == 10
+        assert spans[0].tokens_out == 5
         assert real_bs.exists(spans[0].input_hash)
         assert isinstance(result, openai.types.responses.Response)
 

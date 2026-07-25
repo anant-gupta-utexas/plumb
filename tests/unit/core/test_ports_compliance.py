@@ -80,11 +80,19 @@ class FakeStorageWriter:
     def write_run(self, run: Run, spans: Sequence[Span]) -> None:
         self.runs.append((run, list(spans)))
 
-    def write_score(self, score: Score) -> None:
+    def write_score(self, score: Score, *, idempotency_key: str | None = None) -> bool:
+        del idempotency_key
         self.scores.append(score)
+        return True
 
     def write_example(self, example: Example) -> None:
         self.examples.append(example)
+
+    def open_or_resume(self, run_id: str) -> Run:
+        for run, _spans in self.runs:
+            if run.run_id == run_id:
+                return run
+        raise ValueError(f"run {run_id!r} not found")
 
 
 class FakeStorageReader:

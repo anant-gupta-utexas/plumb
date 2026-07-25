@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import json
 import logging
 import uuid
 from collections.abc import Callable, Sequence
@@ -13,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from plumb.core.entities import (
     Example,
+    ExampleSource,
     Run,
     RunKind,
     RunStatus,
@@ -22,7 +24,7 @@ from plumb.core.entities import (
     SpanKind,
     SpanStatus,
 )
-from plumb.core.errors import ValidationError
+from plumb.core.errors import NotFoundError, ValidationError
 from plumb.core.ports import Clock, IdGenerator, StorageWriter
 
 if TYPE_CHECKING:
@@ -30,6 +32,21 @@ if TYPE_CHECKING:
     from plumb.adapters.storage_sqlite import SQLiteStorageAdapter
 
 logger = logging.getLogger(__name__)
+
+_ATTRIBUTES_MAX_BYTES = 8 * 1024  # ~8KB soft cap (FR-ATTR-4)
+
+
+def _validate_attributes(attributes: dict | None) -> None:
+    """Fail-closed at the API boundary (FR-ATTR-3/4): non-serializable or
+    oversized payloads raise ValidationError before any span is buffered."""
+    if attributes is None:
+        return
+    try:
+        encoded = json.dumps(attributes)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError(f"attributes must be JSON-serializable: {exc}") from exc
+    if len(encoded.encode("utf-8")) > _ATTRIBUTES_MAX_BYTES:
+        raise ValidationError(f"attributes payload exceeds the {_ATTRIBUTES_MAX_BYTES}-byte soft cap")
 
 # ---------------------------------------------------------------------------
 # Module-level singletons (DI pattern — tests monkeypatch these)
@@ -90,17 +107,23 @@ class _NoopStorageWriter:
         prompt_version: str | None = None,
         tool_schema_version: str | None = None,
         git_sha: str | None = None,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
+        dollar_cost: float | None = None,
     ) -> None:
         pass
 
     def write_run(self, run: Run, spans: Sequence[Span]) -> None:
         pass
 
-    def write_score(self, score: Score) -> None:
-        pass
+    def write_score(self, score: Score, *, idempotency_key: str | None = None) -> bool:
+        return True
 
     def write_example(self, example: Example) -> None:
         pass
+
+    def open_or_resume(self, run_id: str) -> Run:
+        raise NotFoundError(f"run {run_id!r} not found")
 
 
 _clock: Clock = _DefaultClock()
@@ -172,6 +195,9 @@ class _RunBuilder:
         "status",
         "end_ts",
         "error_type",
+        "usage_tokens_in",
+        "usage_tokens_out",
+        "usage_dollar_cost",
     )
 
     def __init__(
@@ -199,12 +225,15 @@ class _RunBuilder:
         self.tool_schema_version = tool_schema_version
         self.git_sha = git_sha
         self.spans: list[Span] = []
-        self.scores: list[Score] = []
+        self.scores: list[tuple[Score, str | None]] = []
         self.aborted: bool = False
         self.abort_reason: str | None = None
         self.status: RunStatus | None = None
         self.end_ts: datetime | None = None
         self.error_type: str | None = None
+        self.usage_tokens_in: int | None = None
+        self.usage_tokens_out: int | None = None
+        self.usage_dollar_cost: float | None = None
 
     def freeze(self) -> Run:
         """Produce an immutable Run from the current builder state."""
@@ -273,10 +302,16 @@ class RunHandle:
         latency_ms: float | None = None,
         status: SpanStatus | str | None = None,
         error_type: str | None = None,
+        attributes: dict | None = None,
     ) -> str:
-        """Buffer a span; returns span_id. No-op after abort()."""
+        """Buffer a span; returns span_id. No-op after abort().
+
+        ``attributes`` must be JSON-serializable and under an ~8KB soft cap —
+        validated here (fail-closed) before the span is buffered (FR-ATTR-3/4).
+        """
         if self._builder.aborted:
             return ""
+        _validate_attributes(attributes)
         span_id = _id_gen.new_span_id()
         tokens_in: int | None = None
         tokens_out: int | None = None
@@ -295,6 +330,7 @@ class RunHandle:
             latency_ms=latency_ms,
             status=SpanStatus(status) if isinstance(status, str) else status,
             error_type=error_type,
+            attributes=attributes,
         )
         self._builder.spans.append(span)
         return span_id
@@ -309,12 +345,13 @@ class RunHandle:
         span_id: str | None = None,
         scorer_version: str | None = None,
         rationale: str | None = None,
+        idempotency_key: str | None = None,
     ) -> str:
         """Buffer a score; returns score_id. No-op after abort().
 
-        ``rationale`` is carried in-memory and surfaced on the ``Score`` entity.
-        It is not yet persisted to the SQLite ``scores`` table (no column exists
-        in v1; the column and full durability land in v2 — see deferred-features.md).
+        ``idempotency_key`` is advisory only (FR-IDEM-4) — the actual dedup
+        enforcement is the storage layer's UNIQUE index on
+        ``(run_id, metric_name, scorer_version, span_id)``.
         """
         if self._builder.aborted:
             return ""
@@ -338,7 +375,7 @@ class RunHandle:
             value_label=value_label,
             rationale=rationale,
         )
-        self._builder.scores.append(score)
+        self._builder.scores.append((score, idempotency_key))
         return score_id
 
     def set_models(
@@ -353,6 +390,72 @@ class RunHandle:
         if sub_agent_model is not None:
             self._builder.sub_agent_model = sub_agent_model
 
+    def add_example(
+        self,
+        inputs_hash: str,
+        *,
+        source: ExampleSource | str,
+        expected_output_hash: str | None = None,
+        rubric: str | None = None,
+    ) -> str:
+        """Promote the active run to a regression example; returns example_id.
+
+        Writes immediately via the same `write_example` path `plumb example
+        promote` (CLI) uses — not buffered like `add_span`/`add_score`. No-op
+        after `abort()`. Hash validation happens via `Example.__post_init__`
+        (raises `ValidationError` before any write).
+        """
+        if self._builder.aborted:
+            return ""
+        example_id = _id_gen.new_example_id()
+        example = Example(
+            example_id=example_id,
+            task_id=self._builder.task_id,
+            inputs_hash=inputs_hash,
+            expected_output_hash=expected_output_hash,
+            source=ExampleSource(source) if isinstance(source, str) else source,
+            origin_run_id=self._builder.run_id,
+            active=True,
+            rubric=rubric,
+            created_at=_clock.now(),
+        )
+        try:
+            _storage_writer.write_example(example)
+        except Exception as err:
+            # NFR-Rel-1: NEVER raise plumb-internal failure into caller
+            logger.warning(
+                "plumb storage failure (write_example)",
+                extra={
+                    "plumb_internal_error": True,
+                    "run_id": self._builder.run_id,
+                    "error_class": type(err).__name__,
+                },
+            )
+        return example_id
+
+    def set_usage(
+        self,
+        *,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
+        dollar_cost: float | None = None,
+    ) -> None:
+        """Late-bind run-level usage/cost fields; last call wins (FR-USAGE-1).
+
+        If never called, `tokens_in`/`tokens_out` are auto-filled at close
+        time from the buffered spans' split token fields (FR-USAGE-3).
+        `dollar_cost` is NEVER auto-filled — absent an explicit call it stays
+        `NULL` (FR-USAGE-3a). No-op after `abort()` (FR-USAGE-5).
+        """
+        if self._builder.aborted:
+            return
+        if tokens_in is not None:
+            self._builder.usage_tokens_in = tokens_in
+        if tokens_out is not None:
+            self._builder.usage_tokens_out = tokens_out
+        if dollar_cost is not None:
+            self._builder.usage_dollar_cost = dollar_cost
+
     def abort(self, reason: str) -> None:
         """Mark run as aborted; future add_* calls become no-ops, buffered spans are preserved."""
         if not reason:
@@ -364,6 +467,82 @@ class RunHandle:
 # ---------------------------------------------------------------------------
 # _RunFactory — returned by run(); implements decorator + context manager
 # ---------------------------------------------------------------------------
+
+
+def _compute_run_level_tokens(
+    explicit_tokens_in: int | None,
+    explicit_tokens_out: int | None,
+    buffered_spans: list[Span],
+) -> tuple[int | None, int | None]:
+    """FR-USAGE-3 auto-fill precedence: explicit set_usage() wins per-field
+    (no merge with the span sum); otherwise sum the buffered spans' split
+    tokens_in/tokens_out, excluding any span with tokens_in is None."""
+    if explicit_tokens_in is not None or explicit_tokens_out is not None:
+        return explicit_tokens_in, explicit_tokens_out
+    eligible = [s for s in buffered_spans if s.tokens_in is not None]
+    if not eligible:
+        return None, None
+    return (
+        sum(s.tokens_in or 0 for s in eligible),
+        sum(s.tokens_out or 0 for s in eligible),
+    )
+
+
+def _finalize_and_write(
+    builder: _RunBuilder,
+    exc_type: type[BaseException] | None,
+) -> None:
+    """Shared close-out logic for `_RunFactory` and `_ResumeRunFactory`.
+
+    Determines final status, calls `finalize_run` (an UPDATE regardless of
+    whether the row was opened via `open_run` or resumed via
+    `open_or_resume`), and flushes buffered scores. Never raises
+    (NFR-Rel-1) — storage failures are logged and swallowed.
+    """
+    if exc_type is not None:
+        builder.status = RunStatus.FAILURE
+        builder.error_type = exc_type.__name__
+    elif builder.aborted:
+        builder.status = RunStatus.ABORTED
+        builder.error_type = builder.abort_reason
+    else:
+        builder.status = RunStatus.SUCCESS
+
+    builder.end_ts = _clock.now()
+
+    try:
+        spans = list(builder.spans)
+        scores = list(builder.scores)
+        tokens_in, tokens_out = _compute_run_level_tokens(
+            builder.usage_tokens_in, builder.usage_tokens_out, spans
+        )
+        _storage_writer.finalize_run(
+            builder.run_id,
+            builder.status,
+            builder.end_ts,
+            spans,
+            error_type=builder.error_type,
+            orchestrator_model=builder.orchestrator_model,
+            sub_agent_model=builder.sub_agent_model,
+            prompt_version=builder.prompt_version,
+            tool_schema_version=builder.tool_schema_version,
+            git_sha=builder.git_sha,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            dollar_cost=builder.usage_dollar_cost,
+        )
+        for score, idempotency_key in scores:
+            _storage_writer.write_score(score, idempotency_key=idempotency_key)
+    except Exception as err:
+        # NFR-Rel-1: NEVER raise plumb-internal failure into caller
+        logger.warning(
+            "plumb storage failure",
+            extra={
+                "plumb_internal_error": True,
+                "run_id": builder.run_id,
+                "error_class": type(err).__name__,
+            },
+        )
 
 
 class _RunFactory:
@@ -483,45 +662,8 @@ class _RunFactory:
             return False
         builder = handle._builder
 
-        # determine final status
-        if exc_type is not None:
-            builder.status = RunStatus.FAILURE
-            builder.error_type = exc_type.__name__
-        elif builder.aborted:
-            builder.status = RunStatus.ABORTED
-            builder.error_type = builder.abort_reason
-        else:
-            builder.status = RunStatus.SUCCESS
-
-        builder.end_ts = _clock.now()
-
         try:
-            spans = list(builder.spans)
-            scores = list(builder.scores)
-            _storage_writer.finalize_run(
-                builder.run_id,
-                builder.status,
-                builder.end_ts,
-                spans,
-                error_type=builder.error_type,
-                orchestrator_model=builder.orchestrator_model,
-                sub_agent_model=builder.sub_agent_model,
-                prompt_version=builder.prompt_version,
-                tool_schema_version=builder.tool_schema_version,
-                git_sha=builder.git_sha,
-            )
-            for score in scores:
-                _storage_writer.write_score(score)
-        except Exception as err:
-            # NFR-Rel-1: NEVER raise plumb-internal failure into caller
-            logger.warning(
-                "plumb storage failure",
-                extra={
-                    "plumb_internal_error": True,
-                    "run_id": builder.run_id,
-                    "error_class": type(err).__name__,
-                },
-            )
+            _finalize_and_write(builder, exc_type)
         finally:
             if self._token is not None:
                 _active_run.reset(self._token)
@@ -592,6 +734,87 @@ class _RunFactory:
 
 
 # ---------------------------------------------------------------------------
+# _ResumeRunFactory — returned by resume_run(); context manager ONLY
+# ---------------------------------------------------------------------------
+
+
+class _ResumeRunFactory:
+    """Returned by `resume_run(...)`. Context-manager only (sync + async) — no
+    decorator form, since resuming requires an existing `run_id` value that
+    can't be bound at decoration time."""
+
+    __slots__ = ("run_id", "_token", "_handle")
+
+    def __init__(self, *, run_id: str) -> None:
+        self.run_id = run_id
+        self._token: Token[RunHandle | None] | None = None
+        self._handle: RunHandle | None = None
+
+    def __enter__(self) -> RunHandle:
+        _init_storage_singletons()
+
+        # FR-RESUME-4 / AC-RESUME-3: raises NotFoundError if absent.
+        existing = _storage_writer.open_or_resume(self.run_id)
+
+        # FR-RESUME-2 / AC-RESUME-2: only a 'pending' run is resumable.
+        # 'stalled' is treated as terminal-for-this-purpose (Pending Decision 1,
+        # tasks file) — resuming a run the stalled-sweep already gave up on
+        # would race the sweep.
+        if existing.status != RunStatus.PENDING:
+            raise ValidationError(
+                f"run {self.run_id!r} is already terminal (status={existing.status.value!r})"
+            )
+
+        builder = _RunBuilder(
+            run_id=existing.run_id,
+            task_id=existing.task_id,
+            kind=existing.kind,
+            parent_run_id=existing.parent_run_id,
+            start_ts=existing.start_ts,
+            orchestrator_model=existing.orchestrator_model,
+            sub_agent_model=existing.sub_agent_model,
+            prompt_version=existing.prompt_version,
+            tool_schema_version=existing.tool_schema_version,
+            git_sha=existing.git_sha,
+        )
+        handle = RunHandle(builder)
+        self._token = _active_run.set(handle)
+        self._handle = handle
+        return handle
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> bool:
+        handle = self._handle
+        if handle is None:
+            return False
+        builder = handle._builder
+
+        try:
+            _finalize_and_write(builder, exc_type)
+        finally:
+            if self._token is not None:
+                _active_run.reset(self._token)
+                self._token = None
+
+        return False  # NEVER suppress user exceptions (FR-EDGE-1)
+
+    async def __aenter__(self) -> RunHandle:
+        return self.__enter__()
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> bool:
+        return self.__exit__(exc_type, exc_val, exc_tb)
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
@@ -629,3 +852,23 @@ def run(
         tool_schema_version=tool_schema_version,
         git_sha=git_sha,
     )
+
+
+def resume_run(run_id: str) -> _ResumeRunFactory:
+    """Re-open an existing (`pending`) run as a context manager.
+
+    Unlike `run()`, this is context-manager only — there is no decorator form,
+    since resuming requires an existing `run_id` that can't be bound at
+    decoration time.
+
+    Raises:
+        NotFoundError: if `run_id` doesn't exist.
+        ValidationError: if the run is already terminal
+            (`success`/`failure`/`aborted`/`stalled`).
+
+    Usage::
+
+        with plumb.resume_run(run_id) as r:
+            r.add_span(SpanKind.LLM, "generate")
+    """
+    return _ResumeRunFactory(run_id=run_id)

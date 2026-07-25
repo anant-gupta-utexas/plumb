@@ -4,7 +4,7 @@ SQL strings are reproduced verbatim from TRD §7.1 — do not reformat them.
 """
 # ruff: noqa: E501
 
-SCHEMA_VERSION: int = 1
+SCHEMA_VERSION: int = 2
 
 DDL_STATEMENTS: tuple[str, ...] = (
     # -------------------------------------------------------------------------
@@ -90,4 +90,20 @@ CREATE TABLE IF NOT EXISTS examples (
     "CREATE INDEX IF NOT EXISTS idx_examples_task_active ON examples(task_id, active)",
     "CREATE INDEX IF NOT EXISTS idx_examples_source      ON examples(source)",
     "CREATE INDEX IF NOT EXISTS idx_examples_origin      ON examples(origin_run_id)",
+)
+
+# -----------------------------------------------------------------------------
+# Migration user_version 1 -> 2 (DATA-MIG-2, v1.1 "Atlas unblock + schema v2")
+# -----------------------------------------------------------------------------
+# Five additive DDL statements. Applied inside a single transaction by
+# SQLiteStorageAdapter._bootstrap_schema, after the DATA-MIG-6 duplicate
+# pre-check on `scores` has passed. Statement order among the four ALTERs is
+# not load-bearing (none touch `scores` uniqueness); only the pre-check must
+# precede the index creation.
+MIGRATION_1_TO_2: tuple[str, ...] = (
+    "ALTER TABLE scores ADD COLUMN rationale TEXT",
+    "ALTER TABLE spans  ADD COLUMN tokens_in INTEGER",
+    "ALTER TABLE spans  ADD COLUMN tokens_out INTEGER",
+    "CREATE UNIQUE INDEX idx_scores_idem ON scores(run_id, metric_name, scorer_version, IFNULL(span_id, ''))",
+    "ALTER TABLE spans  ADD COLUMN attributes TEXT",
 )

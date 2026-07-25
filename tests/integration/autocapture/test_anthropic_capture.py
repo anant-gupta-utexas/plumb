@@ -103,9 +103,9 @@ class TestSyncAnthropicCapture:
 
         spans = adapter.get_spans_for_run(r.run_id)
         span = spans[0]
-        # tokens_in stores the sum (tokens_in + tokens_out) per the entity storage contract
-        assert span.tokens_in == 15  # 10 + 5
-        assert span.tokens_out is None
+        # v1.1: tokens_in/tokens_out round-trip as the real split (Task 4).
+        assert span.tokens_in == 10
+        assert span.tokens_out == 5
 
     def test_two_blobs_exist(
         self,

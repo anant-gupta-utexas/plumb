@@ -132,6 +132,52 @@ class TestAddSpan:
         assert result == ""
         assert len(h._builder.spans) == 0
 
+    def test_attributes_round_trip_into_buffered_span(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import plumb.api as _api
+        from tests.conftest import FakeIdGenerator
+
+        monkeypatch.setattr(_api, "_id_gen", FakeIdGenerator())
+        h = _make_handle()
+        attrs = {"lane": "planned", "engine": "codex", "attempt_n": 2}
+        h.add_span(SpanKind.LLM, "gen", attributes=attrs)
+        assert h._builder.spans[0].attributes == attrs
+
+    def test_non_serializable_attributes_raises_no_span_buffered(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import plumb.api as _api
+        from tests.conftest import FakeIdGenerator
+
+        monkeypatch.setattr(_api, "_id_gen", FakeIdGenerator())
+        h = _make_handle()
+        with pytest.raises(ValidationError):
+            h.add_span(SpanKind.LLM, "gen", attributes={"bad": object()})
+        assert len(h._builder.spans) == 0
+
+    def test_oversized_attributes_raises_no_span_buffered(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import plumb.api as _api
+        from tests.conftest import FakeIdGenerator
+
+        monkeypatch.setattr(_api, "_id_gen", FakeIdGenerator())
+        h = _make_handle()
+        huge = {"blob": "x" * 9000}
+        with pytest.raises(ValidationError):
+            h.add_span(SpanKind.LLM, "gen", attributes=huge)
+        assert len(h._builder.spans) == 0
+
+    def test_attributes_none_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import plumb.api as _api
+        from tests.conftest import FakeIdGenerator
+
+        monkeypatch.setattr(_api, "_id_gen", FakeIdGenerator())
+        h = _make_handle()
+        h.add_span(SpanKind.LLM, "gen")
+        assert h._builder.spans[0].attributes is None
+
 
 class TestAddScore:
     def test_numeric_score(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -145,7 +191,7 @@ class TestAddScore:
         sid = h.add_score("accuracy", "deterministic", value_numeric=0.95)
         assert len(sid) == 32
         assert len(h._builder.scores) == 1
-        assert h._builder.scores[0].value_numeric == 0.95
+        assert h._builder.scores[0][0].value_numeric == 0.95
 
     def test_label_score(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import plumb.api as _api
@@ -155,7 +201,18 @@ class TestAddScore:
         monkeypatch.setattr(_api, "_clock", FakeClock())
         h = _make_handle()
         h.add_score("quality", "human", value_label="good")
-        assert h._builder.scores[0].value_label == "good"
+        assert h._builder.scores[0][0].value_label == "good"
+
+    def test_idempotency_key_buffered_alongside_score(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import plumb.api as _api
+        from tests.conftest import FakeClock, FakeIdGenerator
+
+        monkeypatch.setattr(_api, "_id_gen", FakeIdGenerator())
+        monkeypatch.setattr(_api, "_clock", FakeClock())
+        h = _make_handle()
+        h.add_score("accuracy", "deterministic", value_numeric=0.95, idempotency_key="my-key")
+        _score, key = h._builder.scores[0]
+        assert key == "my-key"
 
     def test_both_values_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import plumb.api as _api
@@ -213,6 +270,59 @@ class TestSetModels:
         h.set_models(sub_agent_model="haiku")
         assert h._builder.orchestrator_model == "claude"
         assert h._builder.sub_agent_model == "haiku"
+
+
+class TestAddExample:
+    def test_creates_example_row_with_expected_fields(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import plumb.api as _api
+        from tests.conftest import FakeClock, FakeIdGenerator, FakeStorageWriter
+
+        fake_storage = FakeStorageWriter()
+        monkeypatch.setattr(_api, "_id_gen", FakeIdGenerator())
+        monkeypatch.setattr(_api, "_clock", FakeClock())
+        monkeypatch.setattr(_api, "_storage_writer", fake_storage)
+        h = _make_handle(task_id="my-task")
+        example_id = h.add_example("a" * 64, source="production_promotion")
+
+        assert len(example_id) == 32
+        assert len(fake_storage.examples) == 1
+        ex = fake_storage.examples[0]
+        assert ex.example_id == example_id
+        assert ex.origin_run_id == _RUN_ID
+        assert ex.task_id == "my-task"
+        assert ex.active is True
+        assert ex.source.value == "production_promotion"
+
+    def test_malformed_hash_raises_validation_error_no_write(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import plumb.api as _api
+        from tests.conftest import FakeClock, FakeIdGenerator, FakeStorageWriter
+
+        fake_storage = FakeStorageWriter()
+        monkeypatch.setattr(_api, "_id_gen", FakeIdGenerator())
+        monkeypatch.setattr(_api, "_clock", FakeClock())
+        monkeypatch.setattr(_api, "_storage_writer", fake_storage)
+        h = _make_handle()
+        with pytest.raises(ValidationError):
+            h.add_example("not-hex", source="synthetic")
+        assert len(fake_storage.examples) == 0
+
+    def test_noop_after_abort(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import plumb.api as _api
+        from tests.conftest import FakeClock, FakeIdGenerator, FakeStorageWriter
+
+        fake_storage = FakeStorageWriter()
+        monkeypatch.setattr(_api, "_id_gen", FakeIdGenerator())
+        monkeypatch.setattr(_api, "_clock", FakeClock())
+        monkeypatch.setattr(_api, "_storage_writer", fake_storage)
+        h = _make_handle()
+        h.abort("stop")
+        example_id = h.add_example("a" * 64, source="synthetic")
+        assert example_id == ""
+        assert len(fake_storage.examples) == 0
 
 
 class TestAbort:

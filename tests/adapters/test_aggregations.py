@@ -54,13 +54,14 @@ def _score(
     scorer: ScorerKind = ScorerKind.JUDGE,
     value_numeric: float | None = 0.9,
     value_label: str | None = None,
+    scorer_version: str = "v1",
 ) -> Score:
     return Score(
         score_id=score_id,
         run_id=run_id,
         metric_name=metric_name,
         scorer=scorer,
-        scorer_version="v1",
+        scorer_version=scorer_version,
         scored_at=datetime(2026, 1, 1, 12, 0, 5, tzinfo=UTC),
         value_numeric=value_numeric,
         value_label=value_label,
@@ -158,6 +159,7 @@ class TestAggregateScoresForTask:
                 metric_name="quality",
                 scorer=ScorerKind.JUDGE,
                 value_numeric=0.9,
+                scorer_version="v2",
             )
         )
         adapter.write_score(
@@ -218,6 +220,7 @@ class TestAggregateScoresForTask:
                 scorer=ScorerKind.DETERMINISTIC,
                 value_numeric=None,
                 value_label="fail",
+                scorer_version="v2",
             )
         )
 

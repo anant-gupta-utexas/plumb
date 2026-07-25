@@ -19,3 +19,7 @@ class ValidationError(PlumbError):
 
 class JudgeError(PlumbError):
     """Raised when a judge adapter call fails."""
+
+
+class NotFoundError(PlumbError):
+    """Raised when a referenced entity (e.g. run_id) does not exist."""

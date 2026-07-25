@@ -120,11 +120,13 @@ class Run:
 class Span:
     """A single unit of work within a run (TRD §7.1 spans table).
 
-    Token storage contract: the DB schema has a single ``tokens`` column.
-    On write, ``tokens_in + tokens_out`` is summed and stored.  On read, the
-    sum is surfaced as ``tokens_in``; ``tokens_out`` is always ``None``.
-    The in/out split is informational at the entity layer — it is not durable.
-    (v2 deferred: split into ``tokens_in`` + ``tokens_out`` columns.)
+    Token storage contract: the DB schema stores ``tokens_in``/``tokens_out``
+    as separate columns (plus a legacy summed ``tokens`` column for
+    backward-compat reads of pre-migration rows). On write, both the split
+    and the summed value are persisted. On read, a post-migration row
+    surfaces its real ``tokens_in``/``tokens_out`` split; a pre-migration
+    (v1.0) row falls back to the legacy summed ``tokens`` value surfaced as
+    ``tokens_in``, with ``tokens_out`` left ``None`` rather than guessed.
     """
 
     span_id: str
@@ -140,6 +142,7 @@ class Span:
     tokens_out: int | None = None
     error_type: str | None = None
     started_at: datetime | None = None
+    attributes: dict | None = None
 
     def __post_init__(self) -> None:
         _require_hex32(self.span_id, "span_id")
