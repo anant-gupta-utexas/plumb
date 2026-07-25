@@ -837,8 +837,10 @@ their per-decision rationale and the acceptance-criteria detail live in
 | 3 | `scores.rationale` durable column | "v2 — `scores.rationale` durable column" (2026-05-06) | Schema (additive) |
 | 4 | Idempotent score ingestion | "v2 — Idempotent score ingestion" (2026-05-06) | Schema (additive index) + API |
 | 5 | `spans.tokens_in` / `tokens_out` split | "v2 — Span token column split" (2026-04-29) | Schema (additive) |
-| 6 | `set_usage(...)` run-level cost/usage writer | (scope doc, 2026-07-21) — no existing writer for `runs.dollar_cost`/`tokens_in`/`tokens_out` | API + storage (no schema) |
-| 7 | `spans.attributes` JSON column | "v1.1 — `spans.attributes` structured-data column" (2026-06-07) | Schema (additive) |
+| 6 | `set_usage(...)` run-level cost/usage writer + partial-coverage reporting | (scope doc, 2026-07-21; amended 2026-07-24) — no existing writer for `runs.dollar_cost`/`tokens_in`/`tokens_out` | API + storage + `/stats` response field (no schema) |
+| 7 | `spans.attributes` JSON column | "v1.1 — `spans.attributes` structured-data column" (2026-06-07) — **sign-off met 2026-07-24**, accepted | Schema (additive) |
+
+> **Amendment 2026-07-24 (heterogeneous backend cost).** A verified consumer finding (Codex CLI emits **no** cost field; Claude's CLI does) falsified a premise in FR-USAGE-3. Consequences, all folded into §15.7/§15.8/§15.9/§15.10 below: D-a1 re-resolved as a **split** (explicit-only `dollar_cost`, auto-derived `tokens_*`); a **partial-coverage count** added to `/stats` so a subset sum cannot present as complete; token→dollar derivation recorded as a **permanent non-goal** (FR-USAGE-3a); `spans.attributes` confirmed **included** and now load-bearing as the home for backend-specific token breakdown. Full reasoning and the rejected alternatives: [`../1_product_and_research/atlas-unblock-v1.1-scope.md`](../1_product_and_research/atlas-unblock-v1.1-scope.md) "AMENDMENT 2026-07-24".
 
 ### 15.1 `plumb.resume_run(run_id)` — third entry point
 
@@ -960,7 +962,29 @@ def set_usage(
 
 **FR-USAGE-2 (MUST).** The three fields buffer onto `_RunBuilder` (mirroring `set_models`) and are threaded through `finalize_run(...)` into the `_FINALIZE_RUN` UPDATE `SET` list, so a closed run's `runs` row carries them. `write_run` (the offline path) already persists them via `_run_to_row`; only the online finalize path is extended.
 
-**FR-USAGE-3 (MUST — decision D-a1, resolved).** Usage is **caller-supplied via `set_usage`, not auto-derived**. `dollar_cost` has no other source (there is no per-span cost column), and an explicit setter matches how agentic backends report a single authoritative total (e.g. `claude -p --output-format json` → `total_cost_usd`). plumb stays a recorder, not a calculator. plumb MAY additionally auto-fill `runs.tokens_in`/`tokens_out` by summing spans at finalize **only when** `set_usage` did not supply them; it MUST NOT auto-derive `dollar_cost`. If `set_usage` is never called and no auto-fill applies, the columns stay `NULL` — never a fabricated value.
+**FR-USAGE-3 (MUST — decision D-a1, re-resolved 2026-07-24).** Usage sourcing **differs by field**, because backend cost reporting is **heterogeneous**. Verified against two agentic CLI backends: Claude's CLI emits `total_cost_usd`; **Codex CLI (`codex-cli 0.144.4`) emits no cost field of any kind** — its terminal `turn.completed` event carries only `usage: {input_tokens, cached_input_tokens, output_tokens, reasoning_output_tokens}`. This is structural, not a pending gap. (An earlier revision of this FR justified the explicit setter with "matches how agentic backends report a single authoritative total"; that generalization is **false for some backends** and is corrected here. The conclusion for `dollar_cost` is unchanged — indeed strengthened.)
+
+| Field | Source | Rule |
+| --- | --- | --- |
+| `dollar_cost` | **Explicit only** (`set_usage`) | MUST NOT be derived or computed. Absent → `NULL`. |
+| `tokens_in` / `tokens_out` | **Explicit wins; else auto-summed from spans** | Auto-fill MUST apply when `set_usage` did not supply that field. |
+
+- **`dollar_cost` is explicit-only.** It has no other honest source. If no caller supplies it, the column stays `NULL` — never a fabricated or computed value.
+- **`tokens_in`/`tokens_out` MUST auto-fill from spans at finalize when `set_usage` did not supply them** (this promotes the prior `MAY` to a `MUST`). Every backend reports tokens, so the derivation is reliable; requiring each consumer to hand-roll a run-level sum over data plumb already holds is caller burden with no fidelity gain. **Explicit values always win**, so the double-count risk is resolved by precedence, not prohibition.
+- **Ordering dependency (MUST).** Auto-fill runs at finalize *after* spans flush, and MUST sum the split `spans.tokens_in`/`tokens_out` columns (§15.5) — never the v1.0 collapsed `tokens` column, which would yield a run-level `tokens_in` that is really a combined total. §15.5 therefore sequences before this behaviour.
+- **Legacy spans (MUST NOT guess).** For pre-migration spans (`tokens_in IS NULL`, `tokens` non-NULL) the auto-fill MUST NOT infer a split. It excludes those spans from the derivation rather than fabricating one, consistent with FR-TOKENS-3.
+
+**FR-USAGE-3a (MUST — permanent non-goal: no cost derivation).** plumb MUST NOT compute `dollar_cost` from token counts, and MUST NOT ship, embed, fetch, or maintain a model price table — **in this or any future release**. A price table would make plumb a calculator with a staleness failure mode: prices change without notice, and a stale table produces *confidently wrong* figures, which is strictly worse than `NULL` (honestly unknown) for a measurement framework. It would additionally drag model identity, provider, cache-tier pricing, and effective-date tracking into a recorder. This is continuous with §6.3 (plumb does not interpret agentic-CLI internals) and PRD §7 (plumb records, it does not model).
+
+> **Boundary, stated precisely so the non-goal is not over-read:** plumb MAY **sum** `dollar_cost` values callers supplied — aggregating recorded facts is recording. plumb MUST NOT **multiply** tokens by an assumed rate. The line is whether plumb introduces a number no caller ever gave it. This non-goal is cross-referenced in `deferred-features.md`; a future session proposing "helpful" cost estimation should read it as settled, not open.
+
+**FR-USAGE-6 (MUST — partial-coverage honesty).** Because some backends can never supply `dollar_cost`, `SUM(dollar_cost)` over a heterogeneous fleet is a **subset** of true spend while presenting as a complete total. A consumer cannot distinguish "$4.10 total" from "$4.10 across the 12 of 20 runs that could report". plumb MUST NOT present a known-partial aggregate as whole.
+
+`RunStatsRow` (`storage_sqlite.py`) gains `dollar_cost_run_count: int` — the count of runs in the window with non-NULL `dollar_cost`. This is obtained by adding `COUNT(dollar_cost) AS dollar_cost_run_count` to the **existing** aggregate `SELECT` that already computes `COUNT(*) AS run_count` and `SUM(dollar_cost)` in one pass (`storage_sqlite.py:737-751`). **No schema change, no new column, no new query, no hot-path cost.**
+
+Rejected alternatives, recorded so they are not re-litigated: (a) **a `runs.cost_source` discriminator** — rejected as surface creep with no information gain, since `dollar_cost IS NULL` already *is* the "unavailable" signal and "derived" is forbidden by FR-USAGE-3a, leaving a boolean that restates a NULL check; (b) **documenting the caveat and letting callers own it** — rejected because plumb's own `/stats` is the surface presenting the misleading total, and the first consumer to forget publishes a wrong cost-per-unit figure. Reporting how much of your own sum is populated is a recorder's obligation, not interpretation.
+
+**FR-STATS-1 (MUST).** The `/stats` response model `StatsOut` (`_http_schemas.py`) gains `dollar_cost_run_count: int` alongside the existing `dollar_cost_total` and `run_count`, populated in `_http_stats.py`. Clients can then render honestly (e.g. `"$4.10 across 12 of 20 runs"`). `StatsOut` is `extra="forbid"`, so the field MUST be declared explicitly. **Scope note:** `plumb run stats` (`cli.py`) does **not** render cost today — `dollar_cost` appears nowhere in `cli.py` — and v1.1 does **not** add it. CLI cost parity is a separate v1.2 question.
 
 **FR-USAGE-4 (MUST — decision D-a2, resolved).** On a resumed run (§15.1), `set_usage` is **last-wins overwrite** (same semantics as `set_models`), not accumulation — accumulation invites cross-process double-counting. Documented, not enforced.
 
@@ -982,11 +1006,26 @@ def set_usage(
 
 **FR-ATTR-5 (MUST).** Pre-migration span rows have `attributes = NULL` after the `ALTER`; this is correct and MUST NOT be backfilled or fabricated.
 
+**FR-ATTR-6 (MUST — specified home for backend-specific token breakdown; added 2026-07-24).** `attributes` is the **designated durable sink** for per-backend usage fields that do not fit the two-column `tokens_in`/`tokens_out` split. Verified backend shapes: Claude's CLI reports `input`/`output`/`cache_creation`/`cache_read`; Codex CLI reports `input_tokens`/`cached_input_tokens`/`output_tokens`/`reasoning_output_tokens`. **Neither four-field shape fits two columns without loss**, and these fields have no other durable home in the schema.
+
+| Data | Home | Rationale |
+| --- | --- | --- |
+| Billable totals | `spans.tokens_in` / `tokens_out` (§15.5) | The two fields every backend has; typed, indexed, aggregatable. |
+| Backend-specific breakdown (cache tiers, reasoning tokens) | `spans.attributes` JSON | Shape varies per backend; plumb stores it opaquely and does not interpret it. |
+
+This makes `attributes` **load-bearing for fidelity**, not merely convenient for routing analytics: it is the mechanism that keeps the typed token columns two-wide across a heterogeneous fleet. The alternative — named columns per backend field — means at minimum four new `spans` columns that are NULL for every other backend and grow with each new backend, which is exactly the column sprawl the four-table/minimal-surface thesis exists to resist. **Dropping `attributes` from the v1.1 migration would force reopening the `tokens_*` column count**, and would ship a token model that silently discards cache-tier and reasoning breakdown — a new silent-data-loss gap in the release whose stated goal is closing them.
+
+**Sign-off status.** The `deferred-features.md` entry (2026-06-07) recorded this as a *proposal needing sign-off* before the migration is cut. That condition is **met**: the verified backend finding above is the falsifier check the entry asked for, and it came back supporting inclusion. The entry is re-marked **accepted for v1.1**.
+
+> **Known trade, recorded deliberately.** `attributes` now carries data consumers may wish to aggregate (e.g. total cached tokens), and aggregation via `json_extract` is unindexed and slower than a real column. plumb does **not** promise indexed aggregation over `attributes` in v1.1. A consumer needing it should promote that field to a typed column in a later release through the normal additive-migration path. This is an accepted trade, not an oversight.
+
 ### 15.9 v1.1 NFRs (deltas from §4)
 
 **NFR-MIG-1 (MUST).** The `user_version` 1→2 migration MUST complete in ≤ **500 ms** for a database with ≤ 100k score rows on reference hardware (the duplicate pre-check in DATA-MIG-6 is the dominant cost — it is a single indexed `GROUP BY ... HAVING COUNT(*)>1` scan). The added `spans.attributes` column (§15.8) does not change this budget — a bare `ALTER TABLE ... ADD COLUMN` is O(1) metadata in SQLite (no table rewrite).
 
 **NFR-USAGE-1 (MUST).** `set_usage` (§15.7) adds no hot-path cost: it mutates the in-memory `_RunBuilder` and contributes three bound parameters to the existing single-transaction finalize UPDATE — the NFR-Perf-2 run-close budget (≤ 50 ms for ≤ 100 spans) is unaffected.
+
+**NFR-USAGE-2 (MUST).** The FR-USAGE-3 token auto-fill adds no measurable finalize cost: it sums the already-buffered in-memory spans immediately before the existing finalize UPDATE and issues **no additional query**. The NFR-Perf-2 budget is unaffected. Likewise the FR-USAGE-6 coverage count adds one `COUNT(dollar_cost)` aggregate to an **existing** `SELECT` over an already-scanned row set — no extra query, no new index.
 
 **NFR-MIG-2 (MUST).** Migration runs **once**, inside the existing connection bootstrap (`_bootstrap_schema`), before any user query. It adds zero hot-path cost after the one-time run (NFR-Perf-1/2 unaffected).
 
@@ -1041,8 +1080,14 @@ def set_usage(
 **AC-USAGE-1** (→ FR-USAGE-1/2).
 *Given* an open run R, *When* `r.set_usage(tokens_in=100, tokens_out=250, dollar_cost=0.0123)` is called and the block exits, *Then* R's `runs` row has `tokens_in=100`, `tokens_out=250`, `dollar_cost=0.0123`, and `plumb run stats`' `dollar_cost_total` includes `0.0123`.
 
-**AC-USAGE-2** (→ FR-USAGE-3).
-*Given* a run where `set_usage` is never called and no span-sum auto-fill applies, *When* the run closes, *Then* `runs.dollar_cost` is `NULL` (never fabricated); `tokens_in`/`tokens_out` are `NULL` unless auto-filled from spans per FR-USAGE-3.
+**AC-USAGE-2** (→ FR-USAGE-3, FR-USAGE-3a — amended 2026-07-24).
+*Given* a run with two spans carrying `tokens_in`/`tokens_out` of `(10, 25)` and `(5, 30)` where `set_usage` is **never** called, *When* the run closes, *Then* `runs.tokens_in == 15` and `runs.tokens_out == 55` (auto-filled per the FR-USAGE-3 `MUST`), and `runs.dollar_cost IS NULL` — never computed from tokens (FR-USAGE-3a).
+
+**AC-USAGE-3** (→ FR-USAGE-3 precedence + legacy no-guess).
+*Given* a run with spans totalling `tokens_in=15`, *When* `set_usage(tokens_in=999)` is called before close, *Then* `runs.tokens_in == 999` (explicit wins over auto-fill; no summing of the two). *And given* a run whose spans are legacy rows (`tokens_in IS NULL`, `tokens=35`), *When* it closes with no `set_usage`, *Then* those spans are excluded from the derivation and no split is fabricated.
+
+**AC-USAGE-4** (→ FR-USAGE-6, FR-STATS-1 coverage count).
+*Given* a task window with 20 runs of which 12 have non-NULL `dollar_cost` summing to `4.10`, *When* `/stats` is requested, *Then* the response has `dollar_cost_total == 4.10`, `dollar_cost_run_count == 12`, and `run_count == 20` — so a client can render "$4.10 across 12 of 20 runs" rather than implying complete coverage.
 
 **AC-ATTR-1** (→ FR-ATTR-2).
 *Given* a v1.1 database, *When* a span is written with `attributes={"lane":"planned","engine":"codex","attempt_n":2}` and re-read, *Then* `Span.attributes` equals that dict, and `SELECT json_extract(attributes,'$.engine') …` returns `"codex"`.
